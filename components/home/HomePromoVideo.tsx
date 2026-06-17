@@ -13,7 +13,7 @@ export function HomePromoVideo() {
   if (!VIDEO_URL) return null;
 
   return (
-    <View className="px-4 pb-10">
+    <View className="border-t border-slate-100 bg-white px-4 pb-10 pt-8">
       <Text className="text-2xl font-extrabold tracking-tight text-slate-900">
         Pogledajte PharmaTrack u akciji
       </Text>

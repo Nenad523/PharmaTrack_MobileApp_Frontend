@@ -45,7 +45,7 @@ export function HomeNews() {
   }, []);
 
   return (
-    <View className="border-t border-slate-200 bg-white px-4 py-8">
+    <View className="border-t border-slate-100 px-4 py-8">
       <Text className="text-lg font-bold tracking-tight text-slate-800">
         Aktuelnosti iz svijeta zdravlja
       </Text>

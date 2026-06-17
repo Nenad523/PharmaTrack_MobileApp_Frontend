@@ -13,7 +13,7 @@ export function HomeFeatures() {
   const rows = [features.slice(0, 2), features.slice(2, 4)];
 
   return (
-    <View className="px-4 pb-10">
+    <View className="border-t border-slate-100 px-4 pb-10 pt-8">
       <Text className="text-2xl font-bold tracking-tight text-slate-900">
         Kako PharmaTrack funkcioniše
       </Text>

@@ -14,7 +14,7 @@ export function HomeQuickActions() {
   const rows = [quickActions.slice(0, 2), quickActions.slice(2, 4)];
 
   return (
-    <View className="gap-3 px-4 pb-6">
+    <View className="gap-3 px-4 pb-6 pt-2">
       {rows.map((row, i) => (
         <View key={i} className="flex-row gap-3">
           {row.map((action) => {

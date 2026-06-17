@@ -10,9 +10,12 @@ type Props = {
 
 export function ScreenLayout({ children, onLoginPress }: Props) {
   return (
-    <View className="flex-1 bg-white">
+    <View className="flex-1 bg-sky-50">
       <Header onLoginPress={onLoginPress} />
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+        className="bg-sky-50"
+        showsVerticalScrollIndicator={false}
+      >
         {children}
         <Footer />
       </ScrollView>
