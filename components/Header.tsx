@@ -4,9 +4,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type HeaderProps = {
   onLoginPress?: () => void;
+  onRegisterPress?: () => void;
 };
 
-export function Header({ onLoginPress }: HeaderProps) {
+export function Header({ onLoginPress, onRegisterPress }: HeaderProps) {
   const insets = useSafeAreaInsets();
 
   return (
@@ -20,12 +21,21 @@ export function Header({ onLoginPress }: HeaderProps) {
           <Text className="text-xl font-bold text-gray-900">PharmaTrack</Text>
         </View>
 
-        <TouchableOpacity
-          onPress={onLoginPress}
-          className="rounded-lg border border-slate-200 px-3 py-2"
-        >
-          <Text className="text-sm font-medium text-slate-700">Prijava</Text>
-        </TouchableOpacity>
+        <View className="flex-row items-center gap-2">
+          <TouchableOpacity
+            onPress={onLoginPress}
+            className="rounded-lg border border-slate-200 px-3 py-2"
+          >
+            <Text className="text-xs font-medium text-slate-700">Prijava</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={onRegisterPress}
+            className="rounded-lg bg-blue-600 px-3 py-2"
+          >
+            <Text className="text-xs font-medium text-white">Registracija</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );

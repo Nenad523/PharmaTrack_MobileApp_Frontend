@@ -6,14 +6,15 @@ const VIDEO_URL = process.env.EXPO_PUBLIC_HOME_PROMO_VIDEO_URL;
 
 export function HomePromoVideo() {
   const videoRef = useRef<Video>(null);
-  const { width } = useWindowDimensions();
+  const { width } = 
+  useWindowDimensions();
   const videoWidth = width - 32; // px-4 on both sides
   const videoHeight = videoWidth * (9 / 16);
 
   if (!VIDEO_URL) return null;
 
   return (
-    <View className="border-t border-slate-100 bg-white px-4 pb-10 pt-8">
+    <View className="px-4 pb-10">
       <Text className="text-2xl font-extrabold tracking-tight text-slate-900">
         Pogledajte PharmaTrack u akciji
       </Text>
