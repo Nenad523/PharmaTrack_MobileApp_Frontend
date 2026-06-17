@@ -3,6 +3,7 @@
     "name": "PharmaTrack_MobileApp_Frontend",
     "slug": "PharmaTrack_MobileApp_Frontend",
     "version": "1.0.0",
+    "scheme": "pharmatrack",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -20,6 +21,9 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-router"
+    ]
   }
 }

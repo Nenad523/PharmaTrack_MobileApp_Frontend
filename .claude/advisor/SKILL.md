@@ -20,16 +20,25 @@ any mobile app code. Produce a prioritized implementation plan first.
    - Frontend: /home/nenadpopovic_/College/2/SE/PharmaTrack_Frontend/frontend/
    - Backend: /home/nenadpopovic_/College/2/SE/PharmaTrack_Backend/src/
 
-4. Note for every feature:
+4. Extract the mobile design from the frontend source:
+   - Read all CSS/SCSS files in /home/nenadpopovic_/College/2/SE/PharmaTrack_Frontend/frontend/
+   - Extract color variables, typography (font families, sizes, weights), and spacing scale
+   - Read tailwind.config.js if present
+   - Find all mobile-specific media query blocks and extract those styles specifically
+   - Note component structure, class naming patterns, and layout approaches
+   - This design spec must be replicated exactly in the mobile app using NativeWind
+
+5. Note for every feature:
    - Which backend endpoint already exists vs needs to be created
    - Which frontend component to mirror in React Native
    - Data models to replicate exactly (PharmacyDetails, MedicationDetails, MedicationDose, City)
    - Any auth/guard patterns (SessionGuard, RolesGuard) that mobile needs to handle differently
 
-5. Produce an implementation plan:
+6. Produce an implementation plan:
    - Backend changes needed (if any)
    - Mobile screen/component structure
    - API calls with exact endpoint paths
    - Data flow from API to UI
+   - Design spec summary: colors, fonts, spacing to use
 
-6. Only then generate code.
+7. Only then generate code.
