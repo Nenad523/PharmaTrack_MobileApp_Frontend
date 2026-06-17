@@ -1,6 +1,7 @@
-import { View, Text, TouchableOpacity } from "react-native";
+import { View, Text, TouchableOpacity, Alert } from "react-native";
 import { router } from "expo-router";
 import { quickActions } from "./data";
+import { useAuth } from "../../context/AuthContext";
 
 const SHADOW = {
   shadowColor: "#0f172a",
@@ -11,6 +12,7 @@ const SHADOW = {
 } as const;
 
 export function HomeQuickActions() {
+  const { user } = useAuth();
   const rows = [quickActions.slice(0, 2), quickActions.slice(2, 4)];
 
   return (
@@ -20,7 +22,7 @@ export function HomeQuickActions() {
           {row.map((action) => {
             const Icon = action.icon;
 
-            if (action.locked) {
+            if (action.locked && !user) {
               return (
                 <View
                   key={action.title}
@@ -49,7 +51,11 @@ export function HomeQuickActions() {
                 key={action.title}
                 className="flex-1 rounded-2xl border border-slate-200 bg-white p-5"
                 style={SHADOW}
-                onPress={() => router.push(action.href as never)}
+                onPress={() =>
+                  action.href
+                    ? router.push(action.href as never)
+                    : Alert.alert("Uskoro", `${action.title} je u razvoju.`)
+                }
               >
                 <Icon size={22} color="#2563eb" />
                 <Text className="mt-4 text-base font-semibold text-slate-900">
