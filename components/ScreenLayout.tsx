@@ -1,25 +1,45 @@
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { Footer } from "./Footer";
 import { Header } from "./Header";
+import { LoginModal } from "./LoginModal";
+import { RegisterModal } from "./RegisterModal";
 
 type Props = {
   children: ReactNode;
-  onLoginPress?: () => void;
-  onRegisterPress?: () => void;
 };
 
-export function ScreenLayout({ children, onLoginPress, onRegisterPress }: Props) {
+export function ScreenLayout({ children }: Props) {
+  const [loginVisible, setLoginVisible] = useState(false);
+  const [registerVisible, setRegisterVisible] = useState(false);
+
   return (
     <View className="flex-1 bg-sky-50">
-      <Header onLoginPress={onLoginPress} onRegisterPress={onRegisterPress} />
-      <ScrollView
-        className="bg-sky-50"
-        showsVerticalScrollIndicator={false}
-      >
+      <Header
+        onLoginPress={() => setLoginVisible(true)}
+        onRegisterPress={() => setRegisterVisible(true)}
+      />
+      <ScrollView className="bg-sky-50" showsVerticalScrollIndicator={false}>
         {children}
         <Footer />
       </ScrollView>
+
+      <LoginModal
+        visible={loginVisible}
+        onClose={() => setLoginVisible(false)}
+        onSwitchToRegister={() => {
+          setLoginVisible(false);
+          setRegisterVisible(true);
+        }}
+      />
+      <RegisterModal
+        visible={registerVisible}
+        onClose={() => setRegisterVisible(false)}
+        onSwitchToLogin={() => {
+          setRegisterVisible(false);
+          setLoginVisible(true);
+        }}
+      />
     </View>
   );
 }
