@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { Clock, Home, Search } from "lucide-react-native";
+import { Bell, Clock, Home, Search } from "lucide-react-native";
 
 export default function TabLayout() {
   return (
@@ -37,6 +37,13 @@ export default function TabLayout() {
         options={{
           title: "Dežurne",
           tabBarIcon: ({ color, size }) => <Clock size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          title: "Notif",
+          tabBarIcon: ({ color, size }) => <Bell size={size} color={color} />,
         }}
       />
     </Tabs>
