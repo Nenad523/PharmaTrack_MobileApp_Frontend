@@ -109,16 +109,14 @@ export function LoginModal({ visible, onClose, onSwitchToRegister }: Props) {
             className="mt-auto rounded-t-3xl bg-white px-6 pb-10 pt-6"
             onStartShouldSetResponder={() => true}
           >
-            <TouchableOpacity
-              className="absolute right-5 top-5"
-              onPress={handleClose}
-            >
-              <X size={20} color="#9ca3af" />
-            </TouchableOpacity>
-
-            <Text className="mb-6 text-center text-2xl font-bold text-gray-900">
-              Prijavite se
-            </Text>
+            <View className="mb-6 flex-row items-center justify-between">
+              <Text className="text-2xl font-bold text-gray-900">
+                Prijavite se
+              </Text>
+              <TouchableOpacity onPress={handleClose} hitSlop={12}>
+                <X size={22} color="#9ca3af" />
+              </TouchableOpacity>
+            </View>
 
             {generalError ? (
               <Text className="mb-3 text-center text-sm text-red-500">
