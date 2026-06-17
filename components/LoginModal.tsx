@@ -10,6 +10,7 @@ import {
   Pressable,
   ActivityIndicator,
 } from "react-native";
+
 import { Mail, Lock, X } from "lucide-react-native";
 import { apiUrl } from "../lib/api";
 
@@ -104,9 +105,9 @@ export function LoginModal({ visible, onClose, onSwitchToRegister }: Props) {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <Pressable className="flex-1 bg-black/60" onPress={handleClose}>
-          <Pressable
+          <View
             className="mt-auto rounded-t-3xl bg-white px-6 pb-10 pt-6"
-            onPress={() => {}}
+            onStartShouldSetResponder={() => true}
           >
             <TouchableOpacity
               className="absolute right-5 top-5"
@@ -204,7 +205,7 @@ export function LoginModal({ visible, onClose, onSwitchToRegister }: Props) {
                 Registrujte se
               </Text>
             </Text>
-          </Pressable>
+          </View>
         </Pressable>
       </KeyboardAvoidingView>
     </Modal>
