@@ -24,20 +24,20 @@ export function HomeQuickActions() {
               return (
                 <View
                   key={action.title}
-                  className="flex-1 rounded-2xl border border-slate-200 bg-white p-4 opacity-60"
+                  className="flex-1 rounded-2xl border border-slate-200 bg-white p-5 opacity-60"
                 >
                   <View className="flex-row items-start justify-between">
-                    <Icon size={16} color="#94a3b8" />
-                    <View className="rounded-full bg-slate-100 px-2 py-0.5">
-                      <Text className="text-[10px] font-medium text-slate-500">
+                    <Icon size={22} color="#94a3b8" />
+                    <View className="rounded-full bg-slate-100 px-2.5 py-1">
+                      <Text className="text-xs font-medium text-slate-500">
                         Prijava
                       </Text>
                     </View>
                   </View>
-                  <Text className="mt-3 text-sm font-semibold text-slate-900">
+                  <Text className="mt-4 text-base font-semibold text-slate-900">
                     {action.title}
                   </Text>
-                  <Text className="mt-1.5 text-xs leading-5 text-slate-500">
+                  <Text className="mt-1.5 text-sm leading-5 text-slate-500">
                     {action.description}
                   </Text>
                 </View>
@@ -47,15 +47,15 @@ export function HomeQuickActions() {
             return (
               <TouchableOpacity
                 key={action.title}
-                className="flex-1 rounded-2xl border border-slate-200 bg-white p-4"
+                className="flex-1 rounded-2xl border border-slate-200 bg-white p-5"
                 style={SHADOW}
                 onPress={() => router.push(action.href as never)}
               >
-                <Icon size={16} color="#2563eb" />
-                <Text className="mt-3 text-sm font-semibold text-slate-900">
+                <Icon size={22} color="#2563eb" />
+                <Text className="mt-4 text-base font-semibold text-slate-900">
                   {action.title}
                 </Text>
-                <Text className="mt-1.5 text-xs leading-5 text-slate-500">
+                <Text className="mt-1.5 text-sm leading-5 text-slate-500">
                   {action.description}
                 </Text>
               </TouchableOpacity>

@@ -4,20 +4,24 @@ import { Footer } from "./Footer";
 import { Header } from "./Header";
 import { LoginModal } from "./LoginModal";
 import { RegisterModal } from "./RegisterModal";
+import { useAuth } from "../context/AuthContext";
 
 type Props = {
   children: ReactNode;
 };
 
 export function ScreenLayout({ children }: Props) {
+  const { user, logout } = useAuth();
   const [loginVisible, setLoginVisible] = useState(false);
   const [registerVisible, setRegisterVisible] = useState(false);
 
   return (
     <View className="flex-1 bg-sky-50">
       <Header
+        user={user}
         onLoginPress={() => setLoginVisible(true)}
         onRegisterPress={() => setRegisterVisible(true)}
+        onLogoutPress={logout}
       />
       <ScrollView className="bg-sky-50" showsVerticalScrollIndicator={false}>
         {children}

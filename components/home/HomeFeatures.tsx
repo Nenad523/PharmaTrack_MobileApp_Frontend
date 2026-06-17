@@ -26,14 +26,14 @@ export function HomeFeatures() {
               return (
                 <View
                   key={feature.title}
-                  className="flex-1 rounded-2xl border border-slate-200 bg-white p-4"
+                  className="flex-1 rounded-2xl border border-slate-200 bg-white p-5"
                   style={SHADOW}
                 >
-                  <Icon size={20} color="#2563eb" />
-                  <Text className="mt-3 text-sm font-semibold text-slate-900">
+                  <Icon size={24} color="#2563eb" />
+                  <Text className="mt-4 text-base font-semibold text-slate-900">
                     {feature.title}
                   </Text>
-                  <Text className="mt-2 text-xs leading-5 text-slate-600">
+                  <Text className="mt-2 text-sm leading-6 text-slate-600">
                     {feature.description}
                   </Text>
                 </View>

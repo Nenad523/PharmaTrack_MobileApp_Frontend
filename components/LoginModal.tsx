@@ -13,6 +13,7 @@ import {
 
 import { Mail, Lock, X } from "lucide-react-native";
 import { apiUrl } from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 
 type Props = {
   visible: boolean;
@@ -36,6 +37,7 @@ const getErrorMessage = async (res: Response): Promise<string> => {
 };
 
 export function LoginModal({ visible, onClose, onSwitchToRegister }: Props) {
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<Errors>({});
@@ -75,9 +77,8 @@ export function LoginModal({ visible, onClose, onSwitchToRegister }: Props) {
     if (!validate()) return;
     setLoading(true);
     try {
-      const res = await fetch(apiUrl("/api/v1/auth/login"), {
+      const res = await fetch(apiUrl("/api/v1/auth/mobile-login"), {
         method: "POST",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), password }),
       });
@@ -85,6 +86,8 @@ export function LoginModal({ visible, onClose, onSwitchToRegister }: Props) {
         setGeneralError(await getErrorMessage(res));
         return;
       }
+      const { access_token, user } = await res.json();
+      await login(access_token, user);
       handleClose();
     } catch {
       setGeneralError("Došlo je do greške. Pokušajte ponovo.");
