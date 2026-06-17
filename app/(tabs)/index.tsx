@@ -1,6 +1,7 @@
 import { ScrollView, View } from "react-native";
 import { Header } from "../../components/Header";
 import { HomeHero } from "../../components/home/HomeHero";
+import { HomeQuickActions } from "../../components/home/HomeQuickActions";
 
 export default function HomeScreen() {
   return (
@@ -8,10 +9,10 @@ export default function HomeScreen() {
       <Header />
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ flexGrow: 1 }}
         showsVerticalScrollIndicator={false}
       >
         <HomeHero />
+        <HomeQuickActions />
       </ScrollView>
     </View>
   );
