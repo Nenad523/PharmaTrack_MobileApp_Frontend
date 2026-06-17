@@ -2,6 +2,7 @@ import { ScrollView, View } from "react-native";
 import { Header } from "../../components/Header";
 import { HomeFeatures } from "../../components/home/HomeFeatures";
 import { HomeHero } from "../../components/home/HomeHero";
+import { HomeNews } from "../../components/home/HomeNews";
 import { HomePromoVideo } from "../../components/home/HomePromoVideo";
 import { HomeQuickActions } from "../../components/home/HomeQuickActions";
 
@@ -17,6 +18,7 @@ export default function HomeScreen() {
         <HomeQuickActions />
         <HomeFeatures />
         <HomePromoVideo />
+        <HomeNews />
       </ScrollView>
     </View>
   );
