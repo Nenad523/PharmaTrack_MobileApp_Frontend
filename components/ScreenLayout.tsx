@@ -23,8 +23,12 @@ export function ScreenLayout({ children }: Props) {
         onRegisterPress={() => setRegisterVisible(true)}
         onLogoutPress={logout}
       />
-      <ScrollView className="bg-sky-50" showsVerticalScrollIndicator={false}>
-        {children}
+      <ScrollView
+        className="bg-sky-50"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ flexGrow: 1 }}
+      >
+        <View style={{ flex: 1 }}>{children}</View>
         <Footer />
       </ScrollView>
 

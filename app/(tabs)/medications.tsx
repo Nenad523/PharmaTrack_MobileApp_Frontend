@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
@@ -12,6 +11,8 @@ import {
   CheckCircle2,
   ChevronRight,
   Info,
+  Lock,
+  Pill,
   Search,
   TrendingUp,
   X,
@@ -19,6 +20,7 @@ import {
 import { ScreenLayout } from "../../components/ScreenLayout";
 import { MedicineDetailsModal } from "../../components/medications/MedicineDetailsModal";
 import { apiUrl } from "../../lib/api";
+import { useAuth } from "../../context/AuthContext";
 import type {
   ActiveIngredient,
   MedicationDose,
@@ -27,23 +29,33 @@ import type {
 } from "../../lib/medication-types";
 
 const CARD_SHADOW = {
-  shadowColor: "#0f172a",
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.06,
-  shadowRadius: 4,
-  elevation: 2,
+  shadowColor: "#2563eb",
+  shadowOffset: { width: 0, height: 8 },
+  shadowOpacity: 0.12,
+  shadowRadius: 24,
+  elevation: 6,
 } as const;
 
 const BLUE_SHADOW = {
   shadowColor: "#2563eb",
   shadowOffset: { width: 0, height: 4 },
-  shadowOpacity: 0.2,
+  shadowOpacity: 0.25,
   shadowRadius: 8,
   elevation: 4,
 } as const;
 
+const INPUT_SHADOW = {
+  shadowColor: "#0f172a",
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.05,
+  shadowRadius: 3,
+  elevation: 1,
+} as const;
+
 export default function MedicationsScreen() {
+  const { user } = useAuth();
   const [mode, setMode] = useState<"medication" | "symptom">("medication");
+  const [showLoginNotice, setShowLoginNotice] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [popularMedicines, setPopularMedicines] = useState<string[]>([]);
   const [searchResults, setSearchResults] = useState<MedicineSearchResult[]>([]);
@@ -141,6 +153,14 @@ export default function MedicationsScreen() {
     void load();
   }, [selectedMedicineId]);
 
+  useEffect(() => {
+    if (!user && mode === "symptom") {
+      setMode("medication");
+      setSearchTerm("");
+      setSearchResults([]);
+    }
+  }, [user]);
+
   const resetSearch = () => {
     setSelectedMedicineId(null);
     setSelectedDoses([]);
@@ -148,6 +168,11 @@ export default function MedicationsScreen() {
   };
 
   const handleModeChange = (newMode: "medication" | "symptom") => {
+    if (newMode === "symptom" && !user) {
+      setShowLoginNotice(true);
+      return;
+    }
+    setShowLoginNotice(false);
     setMode(newMode);
     setSearchTerm("");
     setSearchResults([]);
@@ -156,6 +181,7 @@ export default function MedicationsScreen() {
 
   const handleSearchChange = (text: string) => {
     setSearchTerm(text);
+    setShowLoginNotice(false);
     resetSearch();
   };
 
@@ -214,9 +240,6 @@ export default function MedicationsScreen() {
         };
       };
       const dosesData = (await dosesResp.json()) as { data: MedicationDose[] };
-      const doses = Array.isArray(dosesData.data)
-        ? dosesData.data.map((d) => d.strength)
-        : [];
       setDetailsMedicine({
         id: detData.data.id,
         name: detData.data.name,
@@ -225,7 +248,9 @@ export default function MedicationsScreen() {
         activeIngredients: Array.isArray(detData.data.activeIngredients)
           ? detData.data.activeIngredients
           : [],
-        doses,
+        doses: Array.isArray(dosesData.data)
+          ? dosesData.data.map((d) => d.strength)
+          : [],
       });
     } catch {
       setDetailsVisible(false);
@@ -241,50 +266,91 @@ export default function MedicationsScreen() {
 
   return (
     <ScreenLayout>
-      <View className="px-4 pt-6 pb-10 gap-4">
-        {/* Mode Toggle */}
+      <View className="px-4 pt-6 pb-10">
+        {/* Main Card */}
         <View
-          className="flex-row rounded-2xl border border-slate-200 bg-white p-1"
+          className="rounded-3xl border border-blue-200/90 bg-white p-6"
           style={CARD_SHADOW}
         >
-          {(["medication", "symptom"] as const).map((m) => (
+          {/* Icon */}
+          <View
+            className="mb-5 h-16 w-16 items-center justify-center rounded-2xl border border-blue-100 bg-white"
+            style={{
+              shadowColor: "#2563eb",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 4,
+              elevation: 2,
+            }}
+          >
+            <Pill size={32} color="#2563eb" />
+          </View>
+
+          {/* Title & subtitle */}
+          <Text className="text-4xl font-bold tracking-tight text-slate-900">
+            {mode === "symptom" ? "Pretraga po simptomu" : "Pretraga ljekova"}
+          </Text>
+          <Text className="mt-3 text-base leading-7 text-slate-600">
+            {mode === "symptom"
+              ? "Opišite simptome i naš sistem će predložiti odgovarajuće lijekove uz pomoć AI analize."
+              : "Pronađite dostupne ljekove, odaberite željenu dozu i nastavite ka pretrazi apoteka širom Crne Gore."}
+          </Text>
+
+          {/* Mode Toggle */}
+          <View className="mt-6 flex-row rounded-2xl border border-slate-200 bg-slate-50 p-1">
             <TouchableOpacity
-              key={m}
-              onPress={() => handleModeChange(m)}
+              onPress={() => handleModeChange("medication")}
               className={`flex-1 items-center rounded-xl py-2.5 ${
-                mode === m ? "bg-blue-600" : ""
+                mode === "medication" ? "bg-blue-600" : ""
               }`}
             >
               <Text
                 className={`text-sm font-semibold ${
-                  mode === m ? "text-white" : "text-slate-600"
+                  mode === "medication" ? "text-white" : "text-slate-500"
                 }`}
               >
-                {m === "medication" ? "Lijek" : "Simptom"}
+                Lijek
               </Text>
             </TouchableOpacity>
-          ))}
-        </View>
 
-        {/* Main Card */}
-        <View
-          className="rounded-2xl border border-blue-200 bg-white p-4 gap-4"
-          style={CARD_SHADOW}
-        >
-          {/* Title */}
-          <View className="gap-1">
-            <Text className="text-xl font-bold text-slate-900">
-              {mode === "symptom" ? "Pretraga po simptomu" : "Pretraga lijekova"}
-            </Text>
-            <Text className="text-sm text-slate-500">
-              {mode === "symptom"
-                ? "Unesite simptom i pronaći ćemo odgovarajuće lijekove"
-                : "Unesite naziv lijeka ili odaberite iz popularnih"}
-            </Text>
+            <TouchableOpacity
+              onPress={() => handleModeChange("symptom")}
+              className={`flex-1 flex-row items-center justify-center gap-1.5 rounded-xl py-2.5 ${
+                mode === "symptom" ? "bg-blue-600" : ""
+              }`}
+            >
+              <Text
+                className={`text-sm font-semibold ${
+                  mode === "symptom" ? "text-white" : "text-slate-500"
+                }`}
+              >
+                Simptom
+              </Text>
+              {!user && (
+                <Lock
+                  size={12}
+                  color={mode === "symptom" ? "#fff" : "#94a3b8"}
+                />
+              )}
+            </TouchableOpacity>
           </View>
 
+          {/* Login notice for symptom mode */}
+          {showLoginNotice && !user && (
+            <View className="mt-3 flex-row items-start gap-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
+              <Lock size={14} color="#2563eb" style={{ marginTop: 1 }} />
+              <Text className="flex-1 text-xs leading-5 text-blue-800">
+                Pretraga po simptomu dostupna je samo prijavljenim korisnicima.
+                Prijavite se da biste koristili ovu funkciju.
+              </Text>
+            </View>
+          )}
+
           {/* Search Input */}
-          <View className="flex-row h-14 items-center rounded-2xl border border-slate-200 bg-white px-4 gap-3">
+          <View
+            className="mt-5 flex-row h-14 items-center rounded-2xl border border-slate-200 bg-white px-4 gap-3"
+            style={INPUT_SHADOW}
+          >
             <Search size={18} color="#94a3b8" />
             <TextInput
               value={searchTerm}
@@ -295,7 +361,7 @@ export default function MedicationsScreen() {
                   : "Unesite naziv lijeka (min. 3 karaktera)"
               }
               placeholderTextColor="#94a3b8"
-              className="flex-1 text-sm text-slate-900"
+              className="flex-1 text-base text-slate-900"
               autoCapitalize="none"
               autoCorrect={false}
             />
@@ -308,13 +374,15 @@ export default function MedicationsScreen() {
 
           {/* Symptom Warning */}
           {!hasMinimumChars && mode === "symptom" && (
-            <View className="rounded-2xl border border-amber-100 bg-amber-50 p-3">
+            <View className="mt-5 rounded-2xl border border-amber-100 bg-amber-50 p-4">
               <View className="flex-row items-start gap-3">
                 <View className="rounded-xl bg-white/80 p-2">
                   <AlertTriangle size={16} color="#f59e0b" />
                 </View>
                 <View className="flex-1 gap-1">
-                  <Text className="text-sm font-semibold text-slate-900">Važna napomena</Text>
+                  <Text className="text-sm font-semibold text-slate-900">
+                    Važna napomena
+                  </Text>
                   <Text className="text-xs leading-5 text-slate-700">
                     Preporuke na osnovu simptoma služe isključivo u informativne
                     svrhe i ne predstavljaju zamjenu za stručno mišljenje
@@ -327,56 +395,51 @@ export default function MedicationsScreen() {
 
           {/* Popular Medicines */}
           {!hasMinimumChars && mode === "medication" && popularMedicines.length > 0 && (
-            <View className="gap-3">
-              <View className="flex-row items-center gap-2">
+            <View className="mt-6">
+              <View className="flex-row items-center gap-2 mb-4">
                 <TrendingUp size={14} color="#64748b" />
                 <Text className="text-sm font-semibold text-slate-700">Popularno</Text>
               </View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View className="flex-row gap-2">
-                  {popularMedicines.map((name) => (
-                    <TouchableOpacity
-                      key={name}
-                      onPress={() => handlePopularClick(name)}
-                      className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5"
-                    >
-                      <Text className="text-xs font-semibold text-blue-700">{name}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </ScrollView>
+              <View className="flex-row flex-wrap gap-2">
+                {popularMedicines.map((name) => (
+                  <TouchableOpacity
+                    key={name}
+                    onPress={() => handlePopularClick(name)}
+                    className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5"
+                  >
+                    <Text className="text-xs font-semibold text-blue-700">{name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           )}
 
           {/* Search Loading */}
           {isLoadingSearch && (
-            <View className="items-center py-4">
+            <View className="mt-6 items-center py-4">
               <ActivityIndicator color="#2563eb" />
             </View>
           )}
 
           {/* Search Results */}
           {hasMinimumChars && !isLoadingSearch && !selectedMedicine && (
-            <View className="gap-3">
+            <View className="mt-6 gap-3">
               <Text className="text-xs text-slate-500">
                 Rezultati pretrage:{" "}
                 <Text className="font-semibold text-slate-900">{trimmedSearch}</Text>
               </Text>
 
               {searchResults.length === 0 ? (
-                <View
-                  className="rounded-2xl border border-slate-200 bg-white p-4"
-                  style={CARD_SHADOW}
-                >
+                <View className="rounded-2xl border border-slate-200 bg-white p-4">
                   <View className="flex-row items-start gap-3">
-                    <View className="rounded-xl bg-slate-100 p-2">
-                      <Info size={18} color="#64748b" />
+                    <View className="rounded-xl bg-slate-100 p-2.5">
+                      <Info size={22} color="#64748b" />
                     </View>
                     <View className="flex-1 gap-1">
-                      <Text className="text-sm font-semibold text-slate-900">
+                      <Text className="text-lg font-semibold text-slate-900">
                         Nema rezultata
                       </Text>
-                      <Text className="text-xs leading-5 text-slate-500">
+                      <Text className="text-sm leading-6 text-slate-500">
                         Nismo pronašli lijek za pojam &ldquo;{trimmedSearch}&rdquo;.
                       </Text>
                     </View>
@@ -390,12 +453,11 @@ export default function MedicationsScreen() {
                       <View
                         key={medicine.id}
                         className="rounded-2xl border border-slate-200 bg-white p-4"
-                        style={CARD_SHADOW}
                       >
                         <View className="flex-row items-start gap-3">
                           <TouchableOpacity
                             onPress={() => handleSelectMedicine(medicine.id)}
-                            className={`mt-0.5 h-8 w-8 items-center justify-center rounded-full border ${
+                            className={`mt-0.5 h-9 w-9 items-center justify-center rounded-full border ${
                               isSelected
                                 ? "border-blue-300 bg-blue-100"
                                 : "border-blue-200 bg-blue-50"
@@ -412,11 +474,11 @@ export default function MedicationsScreen() {
                           </TouchableOpacity>
 
                           <View className="flex-1 gap-1">
-                            <Text className="text-base font-semibold text-slate-900">
+                            <Text className="text-lg font-semibold text-slate-900">
                               {medicine.name}
                             </Text>
                             <Text
-                              className="text-xs leading-5 text-slate-600"
+                              className="text-sm leading-6 text-slate-600"
                               numberOfLines={2}
                             >
                               {medicine.description}
@@ -428,10 +490,10 @@ export default function MedicationsScreen() {
                             className="flex-row items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2"
                             style={{ flexShrink: 0 }}
                           >
-                            <Text className="text-xs font-semibold text-blue-700">
+                            <Text className="text-sm font-semibold text-blue-700">
                               Detalji
                             </Text>
-                            <ChevronRight size={14} color="#1d4ed8" />
+                            <ChevronRight size={16} color="#1d4ed8" />
                           </TouchableOpacity>
                         </View>
                       </View>
@@ -444,22 +506,25 @@ export default function MedicationsScreen() {
 
           {/* Selected Medicine + Dose Picker */}
           {hasMinimumChars && selectedMedicine && (
-            <View className="overflow-hidden rounded-2xl border border-blue-200">
+            <View className="mt-6 overflow-hidden rounded-2xl border border-blue-200">
               <View className="p-4">
                 <View className="flex-row items-start gap-3">
                   <TouchableOpacity
                     onPress={() => handleSelectMedicine(selectedMedicine.id)}
-                    className="mt-0.5 h-8 w-8 items-center justify-center rounded-full border border-blue-300 bg-blue-100"
+                    className="mt-0.5 h-9 w-9 items-center justify-center rounded-full border border-blue-300 bg-blue-100"
                     style={{ flexShrink: 0 }}
                   >
                     <CheckCircle2 size={16} color="#1d4ed8" />
                   </TouchableOpacity>
 
                   <View className="flex-1 gap-1">
-                    <Text className="text-base font-semibold text-slate-900">
+                    <Text className="text-lg font-semibold text-slate-900">
                       {selectedMedicine.name}
                     </Text>
-                    <Text className="text-xs leading-5 text-slate-600" numberOfLines={2}>
+                    <Text
+                      className="text-sm leading-6 text-slate-600"
+                      numberOfLines={2}
+                    >
                       {selectedMedicine.description}
                     </Text>
                   </View>
@@ -469,14 +534,16 @@ export default function MedicationsScreen() {
                     className="flex-row items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2"
                     style={{ flexShrink: 0 }}
                   >
-                    <Text className="text-xs font-semibold text-blue-700">Detalji</Text>
-                    <ChevronRight size={14} color="#1d4ed8" />
+                    <Text className="text-sm font-semibold text-blue-700">Detalji</Text>
+                    <ChevronRight size={16} color="#1d4ed8" />
                   </TouchableOpacity>
                 </View>
               </View>
 
               <View className="border-t border-slate-200 px-4 py-4 gap-3">
-                <Text className="text-sm font-semibold text-slate-700">Odaberite dozu</Text>
+                <Text className="text-sm font-semibold text-slate-700">
+                  Odaberite dozu
+                </Text>
                 {isLoadingDoses ? (
                   <View className="flex-row gap-2">
                     {[1, 2, 3].map((i) => (
@@ -484,46 +551,44 @@ export default function MedicationsScreen() {
                     ))}
                   </View>
                 ) : (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <View className="flex-row gap-2">
+                  <View className="flex-row flex-wrap gap-2">
+                    <TouchableOpacity
+                      onPress={() => handleDoseClick("all")}
+                      className={`rounded-full border px-3 py-1.5 ${
+                        isDoseActive("all")
+                          ? "border-blue-600 bg-blue-600"
+                          : "border-slate-200 bg-slate-50"
+                      }`}
+                    >
+                      <Text
+                        className={`text-sm font-semibold ${
+                          isDoseActive("all") ? "text-white" : "text-slate-700"
+                        }`}
+                      >
+                        Sve
+                      </Text>
+                    </TouchableOpacity>
+
+                    {selectedMedicineDoses.map((dose) => (
                       <TouchableOpacity
-                        onPress={() => handleDoseClick("all")}
+                        key={dose.id}
+                        onPress={() => handleDoseClick(dose)}
                         className={`rounded-full border px-3 py-1.5 ${
-                          isDoseActive("all")
+                          isDoseActive(dose)
                             ? "border-blue-600 bg-blue-600"
                             : "border-slate-200 bg-slate-50"
                         }`}
                       >
                         <Text
-                          className={`text-xs font-semibold ${
-                            isDoseActive("all") ? "text-white" : "text-slate-700"
+                          className={`text-sm font-semibold ${
+                            isDoseActive(dose) ? "text-white" : "text-slate-700"
                           }`}
                         >
-                          Sve
+                          {dose.strength}
                         </Text>
                       </TouchableOpacity>
-
-                      {selectedMedicineDoses.map((dose) => (
-                        <TouchableOpacity
-                          key={dose.id}
-                          onPress={() => handleDoseClick(dose)}
-                          className={`rounded-full border px-3 py-1.5 ${
-                            isDoseActive(dose)
-                              ? "border-blue-600 bg-blue-600"
-                              : "border-slate-200 bg-slate-50"
-                          }`}
-                        >
-                          <Text
-                            className={`text-xs font-semibold ${
-                              isDoseActive(dose) ? "text-white" : "text-slate-700"
-                            }`}
-                          >
-                            {dose.strength}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </ScrollView>
+                    ))}
+                  </View>
                 )}
               </View>
             </View>
@@ -532,11 +597,10 @@ export default function MedicationsScreen() {
           {/* Search Pharmacies CTA */}
           {isSearchButtonEnabled && (
             <TouchableOpacity
-              className="items-center rounded-2xl bg-blue-600 py-4"
+              className="mt-5 items-center rounded-2xl bg-blue-600 py-4"
               style={BLUE_SHADOW}
               onPress={() => {
                 // Navigation to pharmacy search will be wired when that screen exists
-                // router.push(`/(tabs)/pharmacies?medicineId=${selectedMedicine!.id}&...`)
               }}
             >
               <Text className="text-sm font-semibold text-white">
