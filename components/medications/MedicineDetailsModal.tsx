@@ -60,14 +60,14 @@ export function MedicineDetailsModal({ visible, loading, medicine, onClose }: Pr
 
               {medicine.doses.length > 0 && (
                 <View className="gap-3">
-                  <Text className="text-sm font-semibold text-slate-900">Dostupne doze</Text>
+                  <Text className="text-base font-semibold text-slate-900">Dostupne doze</Text>
                   <View className="flex-row flex-wrap gap-2">
                     {medicine.doses.map((dose, i) => (
                       <View
                         key={`${dose}-${i}`}
                         className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1"
                       >
-                        <Text className="text-xs font-semibold text-emerald-700">{dose}</Text>
+                        <Text className="text-sm font-semibold text-emerald-700">{dose}</Text>
                       </View>
                     ))}
                   </View>
@@ -75,12 +75,12 @@ export function MedicineDetailsModal({ visible, loading, medicine, onClose }: Pr
               )}
 
               <View className="gap-2">
-                <Text className="text-sm font-semibold text-slate-900">Opis</Text>
-                <Text className="text-sm leading-7 text-slate-600">{medicine.description}</Text>
+                <Text className="text-base font-semibold text-slate-900">Opis</Text>
+                <Text className="text-base leading-7 text-slate-600">{medicine.description}</Text>
               </View>
 
               <View className="gap-3">
-                <Text className="text-sm font-semibold text-slate-900">Aktivne supstance</Text>
+                <Text className="text-base font-semibold text-slate-900">Aktivne supstance</Text>
                 {medicine.activeIngredients.length > 0 ? (
                   <View className="flex-row flex-wrap gap-2">
                     {medicine.activeIngredients.map((ing) => (
@@ -88,23 +88,23 @@ export function MedicineDetailsModal({ visible, loading, medicine, onClose }: Pr
                         key={ing.id}
                         className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1"
                       >
-                        <Text className="text-sm font-medium text-slate-700">{ing.name}</Text>
+                        <Text className="text-base font-medium text-slate-700">{ing.name}</Text>
                       </View>
                     ))}
                   </View>
                 ) : (
-                  <Text className="text-sm text-slate-500">Nije dostupno.</Text>
+                  <Text className="text-base text-slate-500">Nije dostupno.</Text>
                 )}
               </View>
 
               <View className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
                 <View className="flex-row items-start gap-3">
                   <View className="rounded-xl bg-white/80 p-2">
-                    <AlertTriangle size={16} color="#f59e0b" />
+                    <AlertTriangle size={18} color="#f59e0b" />
                   </View>
                   <View className="flex-1 gap-1">
-                    <Text className="text-sm font-semibold text-slate-900">Informativni prikaz</Text>
-                    <Text className="text-sm leading-6 text-slate-700">
+                    <Text className="text-base font-semibold text-slate-900">Informativni prikaz</Text>
+                    <Text className="text-base leading-6 text-slate-700">
                       Prikazane informacije služe isključivo u informativne svrhe i ne
                       predstavljaju zamjenu za savjet ljekara ili farmaceuta.
                     </Text>
