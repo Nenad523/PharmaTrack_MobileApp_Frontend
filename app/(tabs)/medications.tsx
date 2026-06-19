@@ -406,9 +406,9 @@ export default function MedicationsScreen() {
                   <TouchableOpacity
                     key={name}
                     onPress={() => handlePopularClick(name)}
-                    className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5"
+                    className="rounded-full border border-blue-100 bg-blue-50 px-3.5 py-1.5"
                   >
-                    <Text className="text-xs font-semibold text-blue-700">{name}</Text>
+                    <Text className="text-sm font-semibold text-blue-700">{name}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
