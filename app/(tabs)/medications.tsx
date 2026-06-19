@@ -17,6 +17,7 @@ import {
   TrendingUp,
   X,
 } from "lucide-react-native";
+import { router } from "expo-router";
 import { ScreenLayout } from "../../components/ScreenLayout";
 import { MedicineDetailsModal } from "../../components/medications/MedicineDetailsModal";
 import { apiUrl } from "../../lib/api";
@@ -600,7 +601,16 @@ export default function MedicationsScreen() {
               className="mt-5 items-center rounded-2xl bg-blue-600 py-4"
               style={BLUE_SHADOW}
               onPress={() => {
-                // Navigation to pharmacy search will be wired when that screen exists
+                if (!selectedMedicine) return;
+                router.push({
+                  pathname: "/pharmacy-search",
+                  params: {
+                    medicineId: String(selectedMedicine.id),
+                    medicineName: selectedMedicine.name,
+                    doseIds: selectedDoses.map((d) => d.id).join(","),
+                    doseStrengths: selectedDoses.map((d) => d.strength).join(","),
+                  },
+                });
               }}
             >
               <Text className="text-sm font-semibold text-white">
