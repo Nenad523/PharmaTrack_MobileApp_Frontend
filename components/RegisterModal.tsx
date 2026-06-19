@@ -155,10 +155,10 @@ export function RegisterModal({ visible, onClose, onSwitchToLogin }: Props) {
                 <Text className="mb-1.5 text-sm font-medium text-slate-700">
                   Ime i Prezime
                 </Text>
-                <View className="flex-row items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                <View className="flex-row items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                   <User size={18} color="#94a3b8" />
                   <TextInput
-                    className="ml-2.5 flex-1 text-sm text-slate-900"
+                    className="ml-2.5 flex-1 text-base text-slate-900"
                     placeholder="Vaše ime i prezime"
                     placeholderTextColor="#94a3b8"
                     value={fullName}
@@ -181,10 +181,10 @@ export function RegisterModal({ visible, onClose, onSwitchToLogin }: Props) {
                 <Text className="mb-1.5 text-sm font-medium text-slate-700">
                   Email Adresa
                 </Text>
-                <View className="flex-row items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                <View className="flex-row items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                   <Mail size={18} color="#94a3b8" />
                   <TextInput
-                    className="ml-2.5 flex-1 text-sm text-slate-900"
+                    className="ml-2.5 flex-1 text-base text-slate-900"
                     placeholder="email@gmail.com"
                     placeholderTextColor="#94a3b8"
                     value={email}
@@ -208,10 +208,10 @@ export function RegisterModal({ visible, onClose, onSwitchToLogin }: Props) {
                 <Text className="mb-1.5 text-sm font-medium text-slate-700">
                   Lozinka
                 </Text>
-                <View className="flex-row items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                <View className="flex-row items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                   <Lock size={18} color="#94a3b8" />
                   <TextInput
-                    className="ml-2.5 flex-1 text-sm text-slate-900"
+                    className="ml-2.5 flex-1 text-base text-slate-900"
                     placeholder="••••••••"
                     placeholderTextColor="#94a3b8"
                     value={password}

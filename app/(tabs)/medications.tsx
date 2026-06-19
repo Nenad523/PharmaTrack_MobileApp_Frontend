@@ -378,13 +378,13 @@ export default function MedicationsScreen() {
             <View className="mt-5 rounded-2xl border border-amber-100 bg-amber-50 p-4">
               <View className="flex-row items-start gap-3">
                 <View className="rounded-xl bg-white/80 p-2">
-                  <AlertTriangle size={16} color="#f59e0b" />
+                  <AlertTriangle size={20} color="#f59e0b" />
                 </View>
                 <View className="flex-1 gap-1">
-                  <Text className="text-sm font-semibold text-slate-900">
+                  <Text className="text-base font-semibold text-slate-900">
                     Važna napomena
                   </Text>
-                  <Text className="text-xs leading-5 text-slate-700">
+                  <Text className="text-sm leading-6 text-slate-700">
                     Preporuke na osnovu simptoma služe isključivo u informativne
                     svrhe i ne predstavljaju zamjenu za stručno mišljenje
                     farmaceuta ili ljekara.
