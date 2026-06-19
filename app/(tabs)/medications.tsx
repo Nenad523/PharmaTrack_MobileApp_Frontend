@@ -267,7 +267,7 @@ export default function MedicationsScreen() {
 
   return (
     <ScreenLayout>
-      <View className="px-4 pt-6 pb-10">
+      <View className="px-4 pt-10 pb-32">
         {/* Main Card */}
         <View
           className="rounded-3xl border border-blue-200/90 bg-white p-6"
