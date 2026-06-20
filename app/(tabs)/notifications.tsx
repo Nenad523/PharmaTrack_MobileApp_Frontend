@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import * as Notifications from "expo-notifications";
 import {
   ActivityIndicator,
   Switch,
@@ -12,7 +11,7 @@ import { ScreenLayout } from "../../components/ScreenLayout";
 import { apiUrl } from "../../lib/api";
 import { authHeader } from "../../lib/auth";
 import { useAuth } from "../../context/AuthContext";
-import { registerForPushNotifications, syncPushTokenWithBackend } from "../../lib/push-notifications";
+import { getPermissionStatus, isExpoGo, registerForPushNotifications, syncPushTokenWithBackend } from "../../lib/push-notifications";
 
 type NotificationItem = {
   id: number;
@@ -49,8 +48,8 @@ export default function NotificationsScreen() {
   const [pushEnabled, setPushEnabled] = useState(false);
 
   useEffect(() => {
-    Notifications.getPermissionsAsync()
-      .then(({ status }) => setPushEnabled(status === "granted"))
+    getPermissionStatus()
+      .then(status => setPushEnabled(status === "granted"))
       .catch(() => {});
   }, []);
 
@@ -187,7 +186,7 @@ export default function NotificationsScreen() {
           </View>
 
           {/* Push toggle */}
-          <View className="flex-row items-center justify-between py-3">
+          <View className={`flex-row items-center justify-between py-3 ${isExpoGo ? "opacity-50" : ""}`}>
             <View className="flex-row items-center gap-3">
               <View className={`h-9 w-9 items-center justify-center rounded-xl ${pushEnabled ? "bg-blue-50" : "bg-slate-100"}`}>
                 <Bell size={17} color={pushEnabled ? "#2563eb" : "#64748b"} />
@@ -197,12 +196,13 @@ export default function NotificationsScreen() {
                   Push obavještenja
                 </Text>
                 <Text className="text-xs text-slate-400">
-                  {pushEnabled ? "Uključeno za ovaj uređaj" : "Dodirnite da uključite"}
+                  {isExpoGo ? "Nije dostupno u Expo Go" : pushEnabled ? "Uključeno za ovaj uređaj" : "Dodirnite da uključite"}
                 </Text>
               </View>
             </View>
             <Switch
               value={pushEnabled}
+              disabled={isExpoGo}
               onValueChange={async (val) => {
                 if (val) {
                   const token = await registerForPushNotifications();
