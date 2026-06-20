@@ -150,7 +150,7 @@ export default function NotificationsScreen() {
           className="rounded-3xl border border-slate-200 bg-white p-5"
           style={CARD_SHADOW}
         >
-          <Text className="mb-4 text-sm font-semibold uppercase tracking-widest text-slate-400">
+          <Text className="mb-4 text-base font-semibold uppercase tracking-widest text-slate-400">
             Kanali obavještavanja
           </Text>
 
