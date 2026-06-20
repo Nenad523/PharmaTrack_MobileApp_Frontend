@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import * as Notifications from "expo-notifications";
 import {
   ActivityIndicator,
   Switch,
@@ -11,6 +12,7 @@ import { ScreenLayout } from "../../components/ScreenLayout";
 import { apiUrl } from "../../lib/api";
 import { authHeader } from "../../lib/auth";
 import { useAuth } from "../../context/AuthContext";
+import { registerForPushNotifications, syncPushTokenWithBackend } from "../../lib/push-notifications";
 
 type NotificationItem = {
   id: number;
@@ -44,6 +46,22 @@ export default function NotificationsScreen() {
   const [loading, setLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [emailEnabled, setEmailEnabled] = useState(true);
+  const [pushEnabled, setPushEnabled] = useState(false);
+
+  useEffect(() => {
+    Notifications.getPermissionsAsync()
+      .then(({ status }) => setPushEnabled(status === "granted"))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    authHeader()
+      .then(headers => fetch(apiUrl("/api/v1/notifications/preferences"), { headers }))
+      .then(res => res.ok ? res.json() : null)
+      .then(data => { if (data?.email_notifications_enabled !== undefined) setEmailEnabled(!!data.email_notifications_enabled); })
+      .catch(() => {});
+  }, [user]);
 
   const fetchNotifications = useCallback(async () => {
     if (!user) return;
@@ -154,30 +172,48 @@ export default function NotificationsScreen() {
             </View>
             <Switch
               value={emailEnabled}
-              onValueChange={setEmailEnabled}
+              onValueChange={async (val) => {
+                setEmailEnabled(val);
+                const headers = await authHeader();
+                await fetch(apiUrl("/api/v1/notifications/preferences"), {
+                  method: "PATCH",
+                  headers: { ...headers, "Content-Type": "application/json" },
+                  body: JSON.stringify({ email_enabled: val }),
+                });
+              }}
               trackColor={{ false: "#e2e8f0", true: "#bfdbfe" }}
               thumbColor={emailEnabled ? "#2563eb" : "#94a3b8"}
             />
           </View>
 
-          {/* Push toggle — placeholder */}
-          <View className="flex-row items-center justify-between py-3 opacity-50">
+          {/* Push toggle */}
+          <View className="flex-row items-center justify-between py-3">
             <View className="flex-row items-center gap-3">
-              <View className="h-9 w-9 items-center justify-center rounded-xl bg-slate-100">
-                <Bell size={17} color="#64748b" />
+              <View className={`h-9 w-9 items-center justify-center rounded-xl ${pushEnabled ? "bg-blue-50" : "bg-slate-100"}`}>
+                <Bell size={17} color={pushEnabled ? "#2563eb" : "#64748b"} />
               </View>
               <View>
                 <Text className="text-sm font-semibold text-slate-800">
                   Push obavještenja
                 </Text>
-                <Text className="text-xs text-slate-400">Uskoro dostupno</Text>
+                <Text className="text-xs text-slate-400">
+                  {pushEnabled ? "Uključeno za ovaj uređaj" : "Dodirnite da uključite"}
+                </Text>
               </View>
             </View>
             <Switch
-              value={false}
-              disabled
+              value={pushEnabled}
+              onValueChange={async (val) => {
+                if (val) {
+                  const token = await registerForPushNotifications();
+                  if (token) {
+                    await syncPushTokenWithBackend(token);
+                    setPushEnabled(true);
+                  }
+                }
+              }}
               trackColor={{ false: "#e2e8f0", true: "#bfdbfe" }}
-              thumbColor="#94a3b8"
+              thumbColor={pushEnabled ? "#2563eb" : "#94a3b8"}
             />
           </View>
         </View>

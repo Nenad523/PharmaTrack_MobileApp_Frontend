@@ -1,6 +1,14 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { loadToken, deleteToken, saveToken, type AuthUser } from "../lib/auth";
 import { apiUrl } from "../lib/api";
+import { registerForPushNotifications, syncPushTokenWithBackend } from "../lib/push-notifications";
+
+async function tryRegisterPush() {
+  try {
+    const token = await registerForPushNotifications();
+    if (token) await syncPushTokenWithBackend(token);
+  } catch {}
+}
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -29,8 +37,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
         if (res.ok) {
           const data = await res.json();
-          if (data?.id) setUser(data as AuthUser);
-          else await deleteToken();
+          if (data?.id) {
+            setUser(data as AuthUser);
+            void tryRegisterPush();
+          } else await deleteToken();
         } else {
           await deleteToken();
         }
@@ -42,6 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (token: string, userData: AuthUser) => {
     await saveToken(token);
     setUser(userData);
+    void tryRegisterPush();
   };
 
   const logout = async () => {

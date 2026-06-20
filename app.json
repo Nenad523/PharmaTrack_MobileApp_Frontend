@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "PharmaTrack_MobileApp_Frontend",
-    "slug": "PharmaTrack_MobileApp_Frontend",
+    "slug": "pharmatrack",
     "version": "1.0.0",
     "scheme": "pharmatrack",
     "orientation": "portrait",
@@ -24,7 +24,21 @@
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store"
-    ]
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#2563eb"
+        }
+      ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "c9266b33-cfec-488c-8646-a3e2ce96279e"
+      }
+    },
+    "owner": "nenadps-organization"
   }
 }
