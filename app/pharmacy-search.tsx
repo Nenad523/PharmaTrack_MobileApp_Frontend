@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as Location from "expo-location";
 import {
   AlertCircle,
   ArrowLeft,
@@ -716,16 +717,14 @@ export default function PharmacySearchScreen() {
     setLocationError("");
     setIsLocating(true);
     try {
-      const geo = globalThis.navigator?.geolocation;
-      if (!geo) throw new Error("Lokacija nije podrzana na ovom uredjaju.");
-      const loc = await new Promise<UserLocation>((resolve, reject) => {
-        geo.getCurrentPosition(
-          (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
-          () => reject(new Error("Nije moguce dobiti lokaciju korisnika.")),
-          { enableHighAccuracy: true, maximumAge: 60000, timeout: 10000 }
-        );
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== Location.PermissionStatus.GRANTED) {
+        throw new Error("Dozvola za lokaciju nije odobrena.");
+      }
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
       });
-      setUserLocation(loc);
+      setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
     } catch (e) {
       setLocationError(e instanceof Error ? e.message : "Nije moguce dobiti lokaciju.");
     } finally {
@@ -813,38 +812,48 @@ export default function PharmacySearchScreen() {
     <ScreenLayout>
       <View className="flex-1 bg-slate-50">
 
-        {/* ── Compact header ── */}
-        <View className="bg-white px-4 pb-3" style={{ paddingTop: insets.top + 8 }}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            className="mb-2 flex-row items-center gap-1.5 self-start"
-          >
-            <ArrowLeft size={15} color="#64748b" />
-            <Text className="text-sm font-semibold text-slate-500">Nazad</Text>
-          </TouchableOpacity>
-          <View className="flex-row items-center gap-2.5">
-            <View className="h-9 w-9 items-center justify-center rounded-2xl bg-blue-50">
-              <Search size={17} color="#2563eb" />
-            </View>
-            <View className="flex-1 min-w-0">
-              <Text className="text-lg font-bold tracking-tight text-slate-900" numberOfLines={1}>
-                {medicineName}
-              </Text>
-              {selectedDoseStrengths.length > 0 && (
-                <Text className="text-xs text-slate-500" numberOfLines={1}>
-                  Doze: {selectedDoseStrengths.join(", ")}
-                </Text>
-              )}
-            </View>
-          </View>
-        </View>
-
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 32 }}
-          stickyHeaderIndices={[0]}
+          stickyHeaderIndices={[1]}
         >
-          {/* ── Sticky filter bar (matches web mobile exactly) ── */}
+          {/* ── [0] Header card — scrolls away, filter bar sticks after it ── */}
+          <View
+            className="mx-4 mb-4 mt-3 rounded-[28px] border border-slate-200 bg-white px-5 py-5"
+            style={{
+              shadowColor: "#0f172a",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.06,
+              shadowRadius: 8,
+              elevation: 3,
+            }}
+          >
+            <TouchableOpacity
+              onPress={() => router.back()}
+              className="flex-row items-center gap-2 self-start"
+            >
+              <ArrowLeft size={16} color="#64748b" />
+              <Text className="text-sm font-semibold text-slate-500">Nazad na pretragu</Text>
+            </TouchableOpacity>
+
+            <View className="mt-4 flex-row items-start gap-3">
+              <View className="mt-1 h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-50">
+                <Search size={20} color="#2563eb" />
+              </View>
+              <View className="flex-1 min-w-0">
+                <Text className="text-2xl font-bold tracking-tight text-slate-950" numberOfLines={2}>
+                  {medicineName}
+                </Text>
+                <Text className="mt-1 text-sm text-slate-500" numberOfLines={1}>
+                  {selectedDoseStrengths.length > 0
+                    ? `Doze: ${selectedDoseStrengths.join(", ")}`
+                    : "Rezultati za odabrane doze"}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* ── [1] Sticky filter bar (matches web mobile exactly) ── */}
           <View className="border-y border-blue-100 bg-white px-4 py-2.5">
             {/* Row 1: chips */}
             <View className="flex-row gap-2">
