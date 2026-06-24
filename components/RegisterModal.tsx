@@ -1,15 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  Keyboard,
   Modal,
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ActivityIndicator,
   ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { User, Mail, Lock, X } from "lucide-react-native";
 import { apiUrl } from "../lib/api";
@@ -52,6 +52,16 @@ export function RegisterModal({ visible, onClose, onSwitchToLogin }: Props) {
   const [errors, setErrors] = useState<Errors>({});
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    if (!visible) { setKeyboardHeight(0); return; }
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const show = Keyboard.addListener(showEvent, (e) => setKeyboardHeight(e.endCoordinates.height));
+    const hide = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
+    return () => { show.remove(); hide.remove(); };
+  }, [visible]);
 
   const resetForm = () => {
     setFullName("");
@@ -121,13 +131,11 @@ export function RegisterModal({ visible, onClose, onSwitchToLogin }: Props) {
       animationType="slide"
       onRequestClose={handleClose}
     >
-      <KeyboardAvoidingView
-        className="flex-1"
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
+      <View className="flex-1">
         <Pressable className="flex-1 bg-black/60" onPress={handleClose}>
           <View
-            className="mt-auto rounded-t-3xl bg-white px-6 pb-10 pt-6"
+            className="mt-auto rounded-t-3xl bg-white px-6 pt-6"
+            style={{ paddingBottom: keyboardHeight > 0 ? keyboardHeight + 12 : 40 }}
             onStartShouldSetResponder={() => true}
           >
             <View className="mb-6 flex-row items-center justify-between">
@@ -257,7 +265,7 @@ export function RegisterModal({ visible, onClose, onSwitchToLogin }: Props) {
             </ScrollView>
           </View>
         </Pressable>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }

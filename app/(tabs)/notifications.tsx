@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Switch,
   Text,
   TouchableOpacity,
@@ -205,11 +206,20 @@ export default function NotificationsScreen() {
               disabled={isExpoGo}
               onValueChange={async (val) => {
                 if (val) {
-                  const token = await registerForPushNotifications();
-                  if (token) {
-                    await syncPushTokenWithBackend(token);
-                    setPushEnabled(true);
+                  try {
+                    const token = await registerForPushNotifications();
+                    if (token) {
+                      await syncPushTokenWithBackend(token);
+                      setPushEnabled(true);
+                    }
+                  } catch (e) {
+                    Alert.alert(
+                      "Push notifikacije",
+                      e instanceof Error ? e.message : "Nije moguće uključiti push notifikacije.",
+                    );
                   }
+                } else {
+                  setPushEnabled(false);
                 }
               }}
               trackColor={{ false: "#e2e8f0", true: "#bfdbfe" }}

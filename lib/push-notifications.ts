@@ -52,13 +52,15 @@ export async function registerForPushNotifications(): Promise<string | null> {
       });
     }
 
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId as string | undefined;
-    if (!projectId) return null;
+    const projectId =
+      (Constants.easConfig?.projectId as string | undefined) ??
+      (Constants.expoConfig?.extra?.eas?.projectId as string | undefined);
+    if (!projectId) throw new Error("EAS projectId nije pronađen u konfiguraciji.");
 
     const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
     return token;
-  } catch {
-    return null;
+  } catch (e) {
+    throw e instanceof Error ? e : new Error("Nije moguće registrovati push notifikacije.");
   }
 }
 
