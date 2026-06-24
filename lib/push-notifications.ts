@@ -66,9 +66,10 @@ export async function registerForPushNotifications(): Promise<string | null> {
 
 export async function syncPushTokenWithBackend(token: string): Promise<void> {
   const headers = await authHeader();
-  await fetch(apiUrl("/api/v1/notifications/push-token"), {
+  const res = await fetch(apiUrl("/api/v1/notifications/push-token"), {
     method: "POST",
     headers: { ...headers, "Content-Type": "application/json" },
     body: JSON.stringify({ token }),
   });
+  if (!res.ok) throw new Error("Nije moguće sačuvati push token.");
 }

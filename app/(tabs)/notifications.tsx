@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useFocusEffect } from "expo-router";
 import {
   ActivityIndicator,
   Alert,
@@ -80,9 +81,11 @@ export default function NotificationsScreen() {
     }
   }, [user]);
 
-  useEffect(() => {
-    void fetchNotifications();
-  }, [fetchNotifications]);
+  useFocusEffect(
+    useCallback(() => {
+      void fetchNotifications();
+    }, [fetchNotifications])
+  );
 
   const handleUnsubscribe = async (id: number) => {
     setDeletingId(id);

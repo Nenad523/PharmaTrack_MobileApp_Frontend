@@ -19,6 +19,7 @@ import {
   AlertCircle,
   ArrowLeft,
   Building2,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
   Clock3,
@@ -28,6 +29,7 @@ import {
   MapPin,
   Navigation,
   Phone,
+  Pill,
   Power,
   RotateCcw,
   RotateCw,
@@ -44,6 +46,12 @@ import { authHeader } from "../lib/auth";
 import { useAuth } from "../context/AuthContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+type MedicationAlternative = {
+  id: number;
+  name: string;
+  description: string | null;
+};
 
 type PharmacySearchDose = {
   doseId: number;
@@ -1050,6 +1058,17 @@ export default function PharmacySearchScreen() {
   const [notificationLoading, setNotificationLoading] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState("");
   const [notificationError, setNotificationError] = useState("");
+
+  // Alternatives state
+  const [alternatives, setAlternatives] = useState<MedicationAlternative[]>([]);
+  const [alternativesLoading, setAlternativesLoading] = useState(false);
+  const [alternativesError, setAlternativesError] = useState("");
+  const [alternativesLoaded, setAlternativesLoaded] = useState(false);
+  const [selectedAlt, setSelectedAlt] = useState<MedicationAlternative | null>(null);
+  const [altDoses, setAltDoses] = useState<PharmacySearchDose[]>([]);
+  const [altDosesLoading, setAltDosesLoading] = useState(false);
+  const [selectedAltDoseIds, setSelectedAltDoseIds] = useState<number[]>([]);
+
   const hasTrackedInitialSearch = useRef(false);
 
   const activeFiltersCount = [
@@ -1201,9 +1220,17 @@ export default function PharmacySearchScreen() {
           })
         )
       );
-      const ok = results.filter((r) => r.status === "fulfilled" && r.value.ok).length;
+      const responses = results
+        .filter((r): r is PromiseFulfilledResult<Response> => r.status === "fulfilled")
+        .map((r) => r.value);
+      const ok = responses.filter((r) => r.ok).length;
+      const conflict = responses.filter((r) => r.status === 409).length;
+      const total = Array.from(new Set(doseIds)).length;
+
       if (ok > 0) {
-        setNotificationMessage(ok === doseIds.length ? "Pretplata je sacuvana." : "Dio pretplata je sacuvan.");
+        setNotificationMessage(ok === total ? "Pretplata je sačuvana." : "Dio pretplata je sačuvan.");
+      } else if (conflict === responses.length && responses.length > 0) {
+        setNotificationError("Već imaš pretplatu na ovaj lijek.");
       } else {
         setNotificationError("Pretplata nije uspjela.");
       }
@@ -1212,6 +1239,72 @@ export default function PharmacySearchScreen() {
     } finally {
       setNotificationLoading(false);
     }
+  };
+
+  const medicineId = params.medicineId ? Number(params.medicineId) : null;
+
+  const loadAlternatives = async () => {
+    if (!medicineId) return;
+    setAlternativesLoading(true);
+    setAlternativesError("");
+    try {
+      const res = await fetch(apiUrl(`/api/v1/medications/${medicineId}/alternatives`));
+      if (!res.ok) throw new Error();
+      const data = (await res.json()) as { data: MedicationAlternative[] };
+      setAlternatives(Array.isArray(data.data) ? data.data : []);
+      if (!Array.isArray(data.data) || data.data.length === 0) {
+        setAlternativesError("Nema alternativnih lijekova.");
+      }
+    } catch {
+      setAlternativesError("Greška pri učitavanju alternativa.");
+    } finally {
+      setAlternativesLoading(false);
+      setAlternativesLoaded(true);
+    }
+  };
+
+  const selectAlternative = async (alt: MedicationAlternative) => {
+    if (selectedAlt?.id === alt.id) {
+      setSelectedAlt(null);
+      setAltDoses([]);
+      setSelectedAltDoseIds([]);
+      return;
+    }
+    setSelectedAlt(alt);
+    setSelectedAltDoseIds([]);
+    setAltDoses([]);
+    setAltDosesLoading(true);
+    try {
+      const res = await fetch(apiUrl(`/api/v1/medications/${alt.id}/doses`));
+      if (!res.ok) throw new Error();
+      const data = (await res.json()) as { data: Array<{ id: number; strength: string }> };
+      const doses: PharmacySearchDose[] = (Array.isArray(data.data) ? data.data : []).map((d) => ({
+        doseId: d.id,
+        strength: d.strength,
+      }));
+      setAltDoses(doses);
+      setSelectedAltDoseIds(doses.map((d) => d.doseId));
+    } catch {
+      setAltDoses([]);
+    } finally {
+      setAltDosesLoading(false);
+    }
+  };
+
+  const searchAlternative = () => {
+    if (!selectedAlt || selectedAltDoseIds.length === 0) return;
+    router.replace({
+      pathname: "/pharmacy-search",
+      params: {
+        medicineId: String(selectedAlt.id),
+        medicineName: selectedAlt.name,
+        doseIds: selectedAltDoseIds.join(","),
+        doseStrengths: altDoses
+          .filter((d) => selectedAltDoseIds.includes(d.doseId))
+          .map((d) => d.strength)
+          .join(","),
+      },
+    });
   };
 
   // ── JSX shared between map and list layouts ──────────────────────────────────
@@ -1668,33 +1761,155 @@ export default function PharmacySearchScreen() {
                   <View className="flex-1">
                     <Text className="text-base font-bold text-slate-900">Nema apoteka za prikaz.</Text>
                     <Text className="mt-1 text-sm leading-6 text-slate-600">
-                      Nema rezultata za odabrani lijek i dozu.
+                      {activeFiltersCount > 0
+                        ? "Nema rezultata za odabrani lijek sa trenutnim filterima."
+                        : "Nema rezultata za odabrani lijek i dozu."}
                     </Text>
+
+                    {notificationMessage ? (
+                      <View className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+                        <Text className="text-sm font-semibold text-emerald-700">{notificationMessage}</Text>
+                      </View>
+                    ) : null}
+                    {notificationError ? (
+                      <View className="mt-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2">
+                        <Text className="text-sm font-semibold text-red-600">{notificationError}</Text>
+                      </View>
+                    ) : null}
+
                     <View className="mt-4 gap-2.5">
+                      {/* Prikaži alternative */}
+                      {medicineId && !alternativesLoaded && (
+                        <TouchableOpacity
+                          onPress={() => void loadAlternatives()}
+                          disabled={alternativesLoading}
+                          className="h-11 flex-row items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 disabled:opacity-60"
+                        >
+                          {alternativesLoading
+                            ? <ActivityIndicator size="small" color="#fff" />
+                            : <Pill size={16} color="#fff" />}
+                          <Text className="text-sm font-bold text-white">
+                            {alternativesLoading ? "Učitavanje..." : "Prikaži alternative"}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {/* Notify me */}
                       {user ? (
                         <TouchableOpacity
                           onPress={() => void subscribeToNotifications()}
-                          disabled={notificationLoading}
-                          className="h-11 flex-row items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 disabled:opacity-60"
+                          disabled={notificationLoading || !!notificationMessage}
+                          className="h-11 flex-row items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 disabled:opacity-60"
                         >
                           {notificationLoading
-                            ? <ActivityIndicator size="small" color="#fff" />
-                            : <Target size={16} color="#fff" />}
-                          <Text className="text-sm font-bold text-white">
-                            {notificationLoading ? "Ucitavanje..." : "Obavijesti me kad bude dostupno"}
+                            ? <ActivityIndicator size="small" color="#2563eb" />
+                            : <Target size={16} color="#2563eb" />}
+                          <Text className="text-sm font-bold text-blue-700">
+                            {notificationLoading ? "Učitavanje..." : "Obavijesti me kad bude dostupno"}
                           </Text>
                         </TouchableOpacity>
                       ) : null}
+
                       {activeFiltersCount > 0 && (
                         <TouchableOpacity
                           onPress={() => setFilters(DEFAULT_FILTERS)}
                           className="h-11 flex-row items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4"
                         >
                           <X size={16} color="#475569" />
-                          <Text className="text-sm font-bold text-slate-700">Ocisti filtere</Text>
+                          <Text className="text-sm font-bold text-slate-700">Očisti filtere</Text>
                         </TouchableOpacity>
                       )}
                     </View>
+
+                    {/* Alternatives list */}
+                    {alternativesLoaded && (
+                      <View className="mt-5 border-t border-slate-100 pt-4">
+                        {alternativesError ? (
+                          <View className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2">
+                            <Text className="text-sm font-semibold text-amber-700">{alternativesError}</Text>
+                          </View>
+                        ) : null}
+
+                        {alternatives.length > 0 && (
+                          <>
+                            <Text className="mb-3 text-sm font-bold text-slate-900">Odaberite alternativni lijek</Text>
+                            <View className="gap-2.5">
+                              {alternatives.map((alt) => {
+                                const isSelected = selectedAlt?.id === alt.id;
+                                return (
+                                  <View
+                                    key={alt.id}
+                                    className={`overflow-hidden rounded-2xl border bg-white ${isSelected ? "border-blue-300" : "border-slate-200"}`}
+                                  >
+                                    <TouchableOpacity
+                                      onPress={() => void selectAlternative(alt)}
+                                      className="flex-row items-center gap-3 p-4"
+                                    >
+                                      <View
+                                        className={`h-8 w-8 items-center justify-center rounded-full border ${isSelected ? "border-blue-300 bg-blue-100" : "border-blue-200 bg-blue-50"}`}
+                                      >
+                                        {isSelected
+                                          ? <CheckCircle2 size={16} color="#2563eb" />
+                                          : <Text className="text-xs font-semibold text-blue-500">○</Text>}
+                                      </View>
+                                      <View className="flex-1">
+                                        <Text className="text-sm font-semibold text-slate-900">{alt.name}</Text>
+                                        {alt.description ? (
+                                          <Text className="mt-0.5 text-xs leading-5 text-slate-500" numberOfLines={2}>{alt.description}</Text>
+                                        ) : null}
+                                      </View>
+                                    </TouchableOpacity>
+
+                                    {isSelected && (
+                                      <View className="border-t border-slate-100 px-4 pb-4 pt-3">
+                                        <Text className="mb-2 text-xs font-semibold text-slate-700">Odaberite dozu</Text>
+                                        {altDosesLoading ? (
+                                          <ActivityIndicator size="small" color="#2563eb" />
+                                        ) : (
+                                          <View className="flex-row flex-wrap gap-2">
+                                            {altDoses.map((dose) => {
+                                              const doseSelected = selectedAltDoseIds.includes(dose.doseId);
+                                              return (
+                                                <TouchableOpacity
+                                                  key={dose.doseId}
+                                                  onPress={() => {
+                                                    setSelectedAltDoseIds((prev) =>
+                                                      doseSelected
+                                                        ? prev.filter((id) => id !== dose.doseId)
+                                                        : [...prev, dose.doseId]
+                                                    );
+                                                  }}
+                                                  className={`rounded-full px-3 py-1.5 ${doseSelected ? "border border-blue-600 bg-blue-600" : "border border-slate-200 bg-slate-50"}`}
+                                                >
+                                                  <Text className={`text-xs font-semibold ${doseSelected ? "text-white" : "text-slate-700"}`}>
+                                                    {dose.strength}
+                                                  </Text>
+                                                </TouchableOpacity>
+                                              );
+                                            })}
+                                          </View>
+                                        )}
+                                      </View>
+                                    )}
+                                  </View>
+                                );
+                              })}
+                            </View>
+
+                            {selectedAlt && (
+                              <TouchableOpacity
+                                onPress={searchAlternative}
+                                disabled={selectedAltDoseIds.length === 0 || altDosesLoading}
+                                className="mt-4 h-11 flex-row items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 disabled:opacity-40"
+                              >
+                                <Search size={16} color="#fff" />
+                                <Text className="text-sm font-bold text-white">Pretraži ovu alternativu</Text>
+                              </TouchableOpacity>
+                            )}
+                          </>
+                        )}
+                      </View>
+                    )}
                   </View>
                 </View>
               </View>
