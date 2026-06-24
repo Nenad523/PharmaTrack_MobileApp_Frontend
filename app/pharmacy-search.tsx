@@ -303,6 +303,21 @@ const MAP_ZOOM_MAX = 17;
 
 function nTiles(zoom: number) { return 1 << zoom; }
 
+function computeFitZoom(lats: number[], lngs: number[], viewW: number, viewH: number): number {
+  if (lats.length === 0) return MAP_ZOOM_DEFAULT;
+  const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+  const lngSpan = Math.max(maxLng - minLng, 0.005);
+  const sinMin = Math.sin(minLat * Math.PI / 180);
+  const sinMax = Math.sin(maxLat * Math.PI / 180);
+  const latFrac0 = 0.5 - Math.log((1 + sinMin) / (1 - sinMin)) / (4 * Math.PI);
+  const latFrac1 = 0.5 - Math.log((1 + sinMax) / (1 - sinMax)) / (4 * Math.PI);
+  const latSpan = Math.max(Math.abs(latFrac0 - latFrac1), 0.000005);
+  const zLng = Math.log2(viewW / TILE_SIZE / (lngSpan / 360));
+  const zLat = Math.log2(viewH / TILE_SIZE / latSpan);
+  return Math.max(MAP_ZOOM_MIN, Math.min(Math.floor(Math.min(zLng, zLat)), MAP_ZOOM_MAX));
+}
+
 function lng2tilef(lng: number, zoom: number): number {
   return ((lng + 180) / 360) * nTiles(zoom);
 }
@@ -364,6 +379,13 @@ function PharmacyMapView({
   const hScrollRef = useRef<ScrollView>(null);
   const vScrollRef = useRef<ScrollView>(null);
 
+  // Auto-fit zoom whenever the result set changes (including city filter)
+  useEffect(() => {
+    const lats = pharmaciesWithCoords.map((p) => p.latitude);
+    const lngs = pharmaciesWithCoords.map((p) => p.longitude);
+    setZoom(computeFitZoom(lats, lngs, windowWidth, mapHeight));
+  }, [pharmaciesWithCoords, windowWidth, mapHeight]);
+
   const { tileX0, tileY0, tileX1, tileY1, tiles, centerPixelX, centerPixelY } = useMemo(() => {
     const lats: number[] = pharmaciesWithCoords.map((p) => p.latitude);
     const lngs: number[] = pharmaciesWithCoords.map((p) => p.longitude);
@@ -421,6 +443,23 @@ function PharmacyMapView({
     }, 80);
     return () => clearTimeout(t);
   }, [centerPixelX, centerPixelY, pharmaciesWithCoords.length, windowWidth, mapHeight]);
+
+  // Center on user location pin when "Moja lokacija" resolves
+  useEffect(() => {
+    if (!userLocation) return;
+    const ulat = normalizeNumber(userLocation.latitude);
+    const ulng = normalizeNumber(userLocation.longitude);
+    if (ulat === null || ulng === null) return;
+    const px = latLngToPixel(ulat, ulng, tileX0, tileY0, zoom);
+    const scrollX = Math.max(0, px.x - windowWidth / 2);
+    const scrollY = Math.max(0, px.y - mapHeight / 2);
+    const t = setTimeout(() => {
+      hScrollRef.current?.scrollTo({ x: scrollX, animated: true });
+      vScrollRef.current?.scrollTo({ y: scrollY, animated: true });
+    }, 150);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userLocation]);
 
   const selectedPharmacy = useMemo(
     () => (selectedId !== null ? pharmaciesWithCoords.find((p) => p.id === selectedId) ?? null : null),
