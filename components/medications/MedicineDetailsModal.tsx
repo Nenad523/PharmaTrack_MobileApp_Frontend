@@ -4,6 +4,7 @@ import {
   Text,
   ScrollView,
   Image,
+  Pressable,
   TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
@@ -22,30 +23,43 @@ export function MedicineDetailsModal({ visible, loading, medicine, onClose }: Pr
     <Modal
       visible={visible}
       animationType="slide"
-      presentationStyle="pageSheet"
+      transparent
       onRequestClose={onClose}
     >
-      <View className="flex-1 bg-white">
-        <View className="flex-row items-center justify-between border-b border-slate-100 px-6 py-5">
-          <Text className="text-xs font-semibold uppercase tracking-widest text-blue-600">
-            Detalji lijeka
-          </Text>
-          <TouchableOpacity
-            onPress={onClose}
-            className="h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white"
-          >
-            <X size={16} color="#64748b" />
-          </TouchableOpacity>
-        </View>
+      <View className="flex-1">
+        {/* Tappable backdrop at the top */}
+        <Pressable className="bg-black/50" style={{ flex: 0.4 }} onPress={onClose} />
 
-        {loading ? (
-          <View className="flex-1 items-center justify-center gap-3">
-            <ActivityIndicator color="#2563eb" size="large" />
-            <Text className="text-sm text-slate-500">Učitavanje detalja...</Text>
+        {/* Sheet — fills from here to bottom */}
+        <View className="rounded-t-3xl bg-white" style={{ flex: 3 }}>
+          {/* Handle */}
+          <View className="items-center pt-3 pb-1">
+            <View className="h-1 w-10 rounded-full bg-slate-200" />
           </View>
-        ) : medicine ? (
-          <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-            <View className="px-6 py-5 gap-6">
+
+          {/* Header */}
+          <View className="flex-row items-center justify-between px-6 py-4 border-b border-slate-100">
+            <Text className="text-xs font-semibold uppercase tracking-widest text-blue-600">
+              Detalji lijeka
+            </Text>
+            <TouchableOpacity
+              onPress={onClose}
+              className="h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white"
+            >
+              <X size={15} color="#64748b" />
+            </TouchableOpacity>
+          </View>
+
+          {loading ? (
+            <View className="flex-1 items-center justify-center gap-3">
+              <ActivityIndicator color="#2563eb" size="large" />
+              <Text className="text-sm text-slate-500">Učitavanje detalja...</Text>
+            </View>
+          ) : medicine ? (
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ padding: 24, gap: 20, paddingBottom: 40 }}
+            >
               <Text className="text-center text-2xl font-bold text-slate-900">
                 {medicine.name}
               </Text>
@@ -53,14 +67,14 @@ export function MedicineDetailsModal({ visible, loading, medicine, onClose }: Pr
               {medicine.img_url ? (
                 <Image
                   source={{ uri: medicine.img_url }}
-                  className="h-44 w-full rounded-2xl"
+                  className="h-40 w-full rounded-2xl"
                   resizeMode="contain"
                 />
               ) : null}
 
               {medicine.doses.length > 0 && (
-                <View className="gap-3">
-                  <Text className="text-base font-semibold text-slate-900">Dostupne doze</Text>
+                <View className="gap-2">
+                  <Text className="text-sm font-semibold text-slate-900">Dostupne doze</Text>
                   <View className="flex-row flex-wrap gap-2">
                     {medicine.doses.map((dose, i) => (
                       <View
@@ -75,12 +89,12 @@ export function MedicineDetailsModal({ visible, loading, medicine, onClose }: Pr
               )}
 
               <View className="gap-2">
-                <Text className="text-base font-semibold text-slate-900">Opis</Text>
-                <Text className="text-base leading-7 text-slate-600">{medicine.description}</Text>
+                <Text className="text-sm font-semibold text-slate-900">Opis</Text>
+                <Text className="text-sm leading-6 text-slate-600">{medicine.description}</Text>
               </View>
 
-              <View className="gap-3">
-                <Text className="text-base font-semibold text-slate-900">Aktivne supstance</Text>
+              <View className="gap-2">
+                <Text className="text-sm font-semibold text-slate-900">Aktivne supstance</Text>
                 {medicine.activeIngredients.length > 0 ? (
                   <View className="flex-row flex-wrap gap-2">
                     {medicine.activeIngredients.map((ing) => (
@@ -88,32 +102,32 @@ export function MedicineDetailsModal({ visible, loading, medicine, onClose }: Pr
                         key={ing.id}
                         className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1"
                       >
-                        <Text className="text-base font-medium text-slate-700">{ing.name}</Text>
+                        <Text className="text-sm font-medium text-slate-700">{ing.name}</Text>
                       </View>
                     ))}
                   </View>
                 ) : (
-                  <Text className="text-base text-slate-500">Nije dostupno.</Text>
+                  <Text className="text-sm text-slate-500">Nije dostupno.</Text>
                 )}
               </View>
 
               <View className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
                 <View className="flex-row items-start gap-3">
                   <View className="rounded-xl bg-white/80 p-2">
-                    <AlertTriangle size={18} color="#f59e0b" />
+                    <AlertTriangle size={16} color="#f59e0b" />
                   </View>
                   <View className="flex-1 gap-1">
-                    <Text className="text-base font-semibold text-slate-900">Informativni prikaz</Text>
-                    <Text className="text-base leading-6 text-slate-700">
+                    <Text className="text-sm font-semibold text-slate-900">Informativni prikaz</Text>
+                    <Text className="text-sm leading-6 text-slate-600">
                       Prikazane informacije služe isključivo u informativne svrhe i ne
                       predstavljaju zamjenu za savjet ljekara ili farmaceuta.
                     </Text>
                   </View>
                 </View>
               </View>
-            </View>
-          </ScrollView>
-        ) : null}
+            </ScrollView>
+          ) : null}
+        </View>
       </View>
     </Modal>
   );

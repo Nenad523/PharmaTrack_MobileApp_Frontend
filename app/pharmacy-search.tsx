@@ -44,6 +44,8 @@ import { StatusBar } from "expo-status-bar";
 import { apiUrl } from "../lib/api";
 import { authHeader } from "../lib/auth";
 import { useAuth } from "../context/AuthContext";
+import { MedicineDetailsModal } from "../components/medications/MedicineDetailsModal";
+import type { MedicineDetails } from "../lib/medication-types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1016,6 +1018,7 @@ export default function PharmacySearchScreen() {
     medicineName?: string;
     doseIds?: string;
     doseStrengths?: string;
+    filters?: string;
   }>();
 
   const medicineName = params.medicineName ?? "Odabrani lijek";
@@ -1037,7 +1040,13 @@ export default function PharmacySearchScreen() {
   );
 
   // Search state
-  const [filters, setFilters] = useState<SearchFilters>(DEFAULT_FILTERS);
+  const [filters, setFilters] = useState<SearchFilters>(() => {
+    try {
+      return params.filters ? (JSON.parse(params.filters) as SearchFilters) : DEFAULT_FILTERS;
+    } catch {
+      return DEFAULT_FILTERS;
+    }
+  });
   const [sort, setSort] = useState<SearchSort>("az");
   const [viewMode, setViewMode] = useState<SearchViewMode>("list");
   const [cities, setCities] = useState<City[]>(FALLBACK_CITIES);
@@ -1068,6 +1077,9 @@ export default function PharmacySearchScreen() {
   const [altDoses, setAltDoses] = useState<PharmacySearchDose[]>([]);
   const [altDosesLoading, setAltDosesLoading] = useState(false);
   const [selectedAltDoseIds, setSelectedAltDoseIds] = useState<number[]>([]);
+  const [altDetailsVisible, setAltDetailsVisible] = useState(false);
+  const [altDetailsLoading, setAltDetailsLoading] = useState(false);
+  const [altDetailsMedicine, setAltDetailsMedicine] = useState<MedicineDetails | null>(null);
 
   const hasTrackedInitialSearch = useRef(false);
 
@@ -1248,7 +1260,7 @@ export default function PharmacySearchScreen() {
     setAlternativesLoading(true);
     setAlternativesError("");
     try {
-      const res = await fetch(apiUrl(`/api/v1/medications/${medicineId}/alternatives`));
+      const res = await fetch(apiUrl(`/api/v1/medication/${medicineId}/alternatives`));
       if (!res.ok) throw new Error();
       const data = (await res.json()) as { data: MedicationAlternative[] };
       setAlternatives(Array.isArray(data.data) ? data.data : []);
@@ -1275,7 +1287,7 @@ export default function PharmacySearchScreen() {
     setAltDoses([]);
     setAltDosesLoading(true);
     try {
-      const res = await fetch(apiUrl(`/api/v1/medications/${alt.id}/doses`));
+      const res = await fetch(apiUrl(`/api/v1/medication/${alt.id}/doses`));
       if (!res.ok) throw new Error();
       const data = (await res.json()) as { data: Array<{ id: number; strength: string }> };
       const doses: PharmacySearchDose[] = (Array.isArray(data.data) ? data.data : []).map((d) => ({
@@ -1291,6 +1303,32 @@ export default function PharmacySearchScreen() {
     }
   };
 
+  const openAltDetails = async (id: number) => {
+    setAltDetailsVisible(true);
+    setAltDetailsLoading(true);
+    setAltDetailsMedicine(null);
+    try {
+      const [detRes, dosesRes] = await Promise.all([
+        fetch(apiUrl(`/api/v1/medication/${id}`)),
+        fetch(apiUrl(`/api/v1/medication/${id}/doses`)),
+      ]);
+      const detData = (await detRes.json()) as { data: { id: number; name: string; description: string; img_url?: string; activeIngredients?: { id: number; name: string }[] } };
+      const dosesData = (await dosesRes.json()) as { data: { id: number; strength: string }[] };
+      setAltDetailsMedicine({
+        id: detData.data.id,
+        name: detData.data.name,
+        description: detData.data.description,
+        img_url: detData.data.img_url,
+        activeIngredients: Array.isArray(detData.data.activeIngredients) ? detData.data.activeIngredients : [],
+        doses: Array.isArray(dosesData.data) ? dosesData.data.map((d) => d.strength) : [],
+      });
+    } catch {
+      setAltDetailsVisible(false);
+    } finally {
+      setAltDetailsLoading(false);
+    }
+  };
+
   const searchAlternative = () => {
     if (!selectedAlt || selectedAltDoseIds.length === 0) return;
     router.replace({
@@ -1303,6 +1341,7 @@ export default function PharmacySearchScreen() {
           .filter((d) => selectedAltDoseIds.includes(d.doseId))
           .map((d) => d.strength)
           .join(","),
+        filters: JSON.stringify(filters),
       },
     });
   };
@@ -1322,10 +1361,10 @@ export default function PharmacySearchScreen() {
     >
       <TouchableOpacity
         onPress={() => router.back()}
-        className="flex-row items-center gap-2 self-start"
+        className="flex-row items-center gap-2.5 self-start rounded-xl border border-slate-200 bg-white px-4 py-3"
       >
-        <ArrowLeft size={16} color="#64748b" />
-        <Text className="text-sm font-semibold text-slate-500">Nazad na pretragu</Text>
+        <ArrowLeft size={18} color="#475569" />
+        <Text className="text-base font-semibold text-slate-600">Nazad na pretragu</Text>
       </TouchableOpacity>
 
       <View className="mt-4 flex-row items-start gap-3">
@@ -1841,28 +1880,38 @@ export default function PharmacySearchScreen() {
                                     key={alt.id}
                                     className={`overflow-hidden rounded-2xl border bg-white ${isSelected ? "border-blue-300" : "border-slate-200"}`}
                                   >
+                                    {/* Header row: circle + name */}
                                     <TouchableOpacity
                                       onPress={() => void selectAlternative(alt)}
-                                      className="flex-row items-center gap-3 p-4"
+                                      className="flex-row items-start gap-4 px-5 pt-5 pb-4"
                                     >
                                       <View
-                                        className={`h-8 w-8 items-center justify-center rounded-full border ${isSelected ? "border-blue-300 bg-blue-100" : "border-blue-200 bg-blue-50"}`}
+                                        className={`mt-0.5 h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border ${isSelected ? "border-blue-300 bg-blue-100" : "border-blue-200 bg-blue-50"}`}
                                       >
                                         {isSelected
-                                          ? <CheckCircle2 size={16} color="#2563eb" />
-                                          : <Text className="text-xs font-semibold text-blue-500">○</Text>}
+                                          ? <CheckCircle2 size={18} color="#2563eb" />
+                                          : <Text className="text-base text-blue-400">○</Text>}
                                       </View>
                                       <View className="flex-1">
-                                        <Text className="text-sm font-semibold text-slate-900">{alt.name}</Text>
+                                        <Text className="text-lg font-bold text-slate-900">{alt.name}</Text>
                                         {alt.description ? (
-                                          <Text className="mt-0.5 text-xs leading-5 text-slate-500" numberOfLines={2}>{alt.description}</Text>
+                                          <Text className="mt-2 text-sm leading-6 text-slate-600" numberOfLines={3}>{alt.description}</Text>
                                         ) : null}
                                       </View>
                                     </TouchableOpacity>
 
+                                    {/* Detalji button */}
+                                    <TouchableOpacity
+                                      onPress={() => void openAltDetails(alt.id)}
+                                      className="mx-4 mb-4 flex-row items-center justify-center gap-2 rounded-xl bg-blue-50 py-3.5"
+                                    >
+                                      <Text className="text-sm font-bold text-blue-600">Detalji</Text>
+                                      <ChevronRight size={16} color="#2563eb" />
+                                    </TouchableOpacity>
+
                                     {isSelected && (
-                                      <View className="border-t border-slate-100 px-4 pb-4 pt-3">
-                                        <Text className="mb-2 text-xs font-semibold text-slate-700">Odaberite dozu</Text>
+                                      <View className="border-t border-slate-100 px-5 pb-5 pt-4">
+                                        <Text className="mb-3 text-sm font-semibold text-slate-700">Odaberite dozu</Text>
                                         {altDosesLoading ? (
                                           <ActivityIndicator size="small" color="#2563eb" />
                                         ) : (
@@ -1879,9 +1928,9 @@ export default function PharmacySearchScreen() {
                                                         : [...prev, dose.doseId]
                                                     );
                                                   }}
-                                                  className={`rounded-full px-3 py-1.5 ${doseSelected ? "border border-blue-600 bg-blue-600" : "border border-slate-200 bg-slate-50"}`}
+                                                  className={`rounded-full px-4 py-2 ${doseSelected ? "border border-blue-600 bg-blue-600" : "border border-slate-200 bg-slate-50"}`}
                                                 >
-                                                  <Text className={`text-xs font-semibold ${doseSelected ? "text-white" : "text-slate-700"}`}>
+                                                  <Text className={`text-sm font-semibold ${doseSelected ? "text-white" : "text-slate-700"}`}>
                                                     {dose.strength}
                                                   </Text>
                                                 </TouchableOpacity>
@@ -1929,6 +1978,12 @@ export default function PharmacySearchScreen() {
 
         {filtersModal}
         {detailsSheet}
+        <MedicineDetailsModal
+          visible={altDetailsVisible}
+          loading={altDetailsLoading}
+          medicine={altDetailsMedicine}
+          onClose={() => setAltDetailsVisible(false)}
+        />
       </View>
     </View>
   );

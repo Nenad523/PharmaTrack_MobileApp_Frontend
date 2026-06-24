@@ -448,9 +448,12 @@ export default function MedicationsScreen() {
               editable={voiceState === "idle"}
             />
             {searchTerm.length > 0 && voiceState === "idle" && (
-              <TouchableOpacity onPress={() => handleSearchChange("")}>
-                <X size={16} color="#94a3b8" />
+              <TouchableOpacity onPress={() => handleSearchChange("")} hitSlop={8}>
+                <X size={20} color="#94a3b8" />
               </TouchableOpacity>
+            )}
+            {searchTerm.length > 0 && voiceState === "idle" && (
+              <View className="h-5 w-px bg-slate-200" />
             )}
             <TouchableOpacity onPress={() => void handleVoicePress()} hitSlop={8}>
               {voiceState === "processing" ? (
