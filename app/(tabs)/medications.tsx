@@ -1,17 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Audio } from "expo-av";
 import {
   AlertTriangle,
   CheckCircle2,
   ChevronRight,
   Info,
   Lock,
+  Mic,
   Pill,
   Search,
   TrendingUp,
@@ -69,6 +72,26 @@ export default function MedicationsScreen() {
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [detailsVisible, setDetailsVisible] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Voice search
+  const [voiceState, setVoiceState] = useState<"idle" | "recording" | "processing">("idle");
+  const [voiceError, setVoiceError] = useState("");
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (voiceState === "recording") {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 1.35, duration: 600, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+        ])
+      ).start();
+    } else {
+      pulseAnim.stopAnimation();
+      pulseAnim.setValue(1);
+    }
+  }, [voiceState]);
 
   const trimmedSearch = searchTerm.trim();
   const hasMinimumChars = trimmedSearch.length >= 3;
@@ -189,6 +212,61 @@ export default function MedicationsScreen() {
   const handlePopularClick = (name: string) => {
     setSearchTerm(name);
     resetSearch();
+  };
+
+  const handleVoicePress = async () => {
+    setVoiceError("");
+
+    if (voiceState === "processing") return;
+
+    if (voiceState === "recording") {
+      // Stop recording and transcribe
+      setVoiceState("processing");
+      try {
+        await recordingRef.current?.stopAndUnloadAsync();
+        const uri = recordingRef.current?.getURI();
+        recordingRef.current = null;
+        if (!uri) throw new Error("Snimak nije dostupan.");
+
+        const formData = new FormData();
+        formData.append("audio", { uri, type: "audio/m4a", name: "voice.m4a" } as any);
+
+        const res = await fetch(apiUrl("/api/v1/medication/transcribe"), {
+          method: "POST",
+          body: formData,
+        });
+        if (!res.ok) throw new Error("Greška pri prepoznavanju govora.");
+        const data = (await res.json()) as { text: string };
+        const text = data.text?.trim();
+        if (text) {
+          handleSearchChange(text);
+        } else {
+          setVoiceError("Nije prepoznat govor. Pokušajte ponovo.");
+        }
+      } catch (e) {
+        setVoiceError(e instanceof Error ? e.message : "Greška pri glasovnoj pretrazi.");
+      } finally {
+        setVoiceState("idle");
+      }
+      return;
+    }
+
+    // Start recording
+    try {
+      const { granted } = await Audio.requestPermissionsAsync();
+      if (!granted) {
+        setVoiceError("Dozvola za mikrofon nije odobrena.");
+        return;
+      }
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      recordingRef.current = recording;
+      setVoiceState("recording");
+    } catch {
+      setVoiceError("Nije moguće pokrenuti snimanje.");
+    }
   };
 
   const handleSelectMedicine = (id: number) => {
@@ -349,7 +427,7 @@ export default function MedicationsScreen() {
 
           {/* Search Input */}
           <View
-            className="mt-5 flex-row h-14 items-center rounded-2xl border border-slate-200 bg-white px-4 gap-3"
+            className={`mt-5 flex-row h-14 items-center rounded-2xl border bg-white px-4 gap-3 ${voiceState === "recording" ? "border-red-300" : "border-slate-200"}`}
             style={INPUT_SHADOW}
           >
             <Search size={18} color="#94a3b8" />
@@ -357,21 +435,36 @@ export default function MedicationsScreen() {
               value={searchTerm}
               onChangeText={handleSearchChange}
               placeholder={
-                mode === "symptom"
+                voiceState === "recording"
+                  ? "Slušam..."
+                  : mode === "symptom"
                   ? "Unesite simptom (min. 3 karaktera)"
                   : "Unesite naziv lijeka (min. 3 karaktera)"
               }
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={voiceState === "recording" ? "#f87171" : "#94a3b8"}
               className="flex-1 text-base text-slate-900"
               autoCapitalize="none"
               autoCorrect={false}
+              editable={voiceState === "idle"}
             />
-            {searchTerm.length > 0 && (
+            {searchTerm.length > 0 && voiceState === "idle" && (
               <TouchableOpacity onPress={() => handleSearchChange("")}>
                 <X size={16} color="#94a3b8" />
               </TouchableOpacity>
             )}
+            <TouchableOpacity onPress={() => void handleVoicePress()} hitSlop={8}>
+              {voiceState === "processing" ? (
+                <ActivityIndicator size="small" color="#2563eb" />
+              ) : (
+                <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                  <Mic size={20} color={voiceState === "recording" ? "#ef4444" : "#94a3b8"} />
+                </Animated.View>
+              )}
+            </TouchableOpacity>
           </View>
+          {voiceError ? (
+            <Text className="mt-2 text-xs font-medium text-red-500">{voiceError}</Text>
+          ) : null}
 
           {/* Symptom Warning */}
           {!hasMinimumChars && mode === "symptom" && (

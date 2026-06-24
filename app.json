@@ -33,6 +33,12 @@
           "icon": "./assets/icon.png",
           "color": "#2563eb"
         }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "PharmaTrack koristi mikrofon za glasovnu pretragu lijekova."
+        }
       ]
     ],
     "extra": {
