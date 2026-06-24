@@ -297,27 +297,31 @@ const getDutyStatus = (pharmacy: PharmacyDetails) => {
 // ─── PharmacyMapView — pure RN OSM tile map (no native map packages) ─────────
 
 const TILE_SIZE = 256;
-const MAP_ZOOM = 10;
-const N_TILES = 1 << MAP_ZOOM;
+const MAP_ZOOM_DEFAULT = 12;
+const MAP_ZOOM_MIN = 8;
+const MAP_ZOOM_MAX = 17;
 
-function lng2tilef(lng: number): number {
-  return ((lng + 180) / 360) * N_TILES;
+function nTiles(zoom: number) { return 1 << zoom; }
+
+function lng2tilef(lng: number, zoom: number): number {
+  return ((lng + 180) / 360) * nTiles(zoom);
 }
 
-function lat2tilef(lat: number): number {
+function lat2tilef(lat: number, zoom: number): number {
   const sinLat = Math.sin((lat * Math.PI) / 180);
-  return (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * N_TILES;
+  return (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * nTiles(zoom);
 }
 
 function latLngToPixel(
   lat: number,
   lng: number,
   tileX0: number,
-  tileY0: number
+  tileY0: number,
+  zoom: number,
 ): { x: number; y: number } {
   return {
-    x: (lng2tilef(lng) - tileX0) * TILE_SIZE,
-    y: (lat2tilef(lat) - tileY0) * TILE_SIZE,
+    x: (lng2tilef(lng, zoom) - tileX0) * TILE_SIZE,
+    y: (lat2tilef(lat, zoom) - tileY0) * TILE_SIZE,
   };
 }
 
@@ -336,8 +340,9 @@ function PharmacyMapView({
   doseStrengths: string[];
   fullScreen?: boolean;
 }) {
-  const { height: windowHeight } = useWindowDimensions();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [zoom, setZoom] = useState(MAP_ZOOM_DEFAULT);
   const mapHeight = Math.max(windowHeight - 290, 360);
   const containerSize = fullScreen ? ({ flex: 1 } as const) : { height: mapHeight };
 
@@ -356,7 +361,10 @@ function PharmacyMapView({
     [pharmacies]
   );
 
-  const { tileX0, tileY0, tileX1, tileY1, tiles } = useMemo(() => {
+  const hScrollRef = useRef<ScrollView>(null);
+  const vScrollRef = useRef<ScrollView>(null);
+
+  const { tileX0, tileY0, tileX1, tileY1, tiles, centerPixelX, centerPixelY } = useMemo(() => {
     const lats: number[] = pharmaciesWithCoords.map((p) => p.latitude);
     const lngs: number[] = pharmaciesWithCoords.map((p) => p.longitude);
     if (userLocation) {
@@ -371,10 +379,21 @@ function PharmacyMapView({
     const minLng = lngs.length > 0 ? Math.min(...lngs) : 18.4;
     const maxLng = lngs.length > 0 ? Math.max(...lngs) : 20.4;
 
-    const tileX0 = Math.max(0, Math.floor(lng2tilef(minLng)) - 1);
-    const tileY0 = Math.max(0, Math.floor(lat2tilef(maxLat)) - 1);
-    const tileX1 = Math.min(N_TILES - 1, Math.floor(lng2tilef(maxLng)) + 1);
-    const tileY1 = Math.min(N_TILES - 1, Math.floor(lat2tilef(minLat)) + 1);
+    const centerLat = (minLat + maxLat) / 2;
+    const centerLng = (minLng + maxLng) / 2;
+
+    const maxTile = nTiles(zoom) - 1;
+    const centerTileX = Math.floor(lng2tilef(centerLng, zoom));
+    const centerTileY = Math.floor(lat2tilef(centerLat, zoom));
+
+    // Render only enough tiles to fill the viewport + a pan buffer (max ~100 tiles total)
+    const halfX = Math.ceil(windowWidth / TILE_SIZE / 2) + 3;
+    const halfY = Math.ceil(mapHeight / TILE_SIZE / 2) + 3;
+
+    const tileX0 = Math.max(0, centerTileX - halfX);
+    const tileY0 = Math.max(0, centerTileY - halfY);
+    const tileX1 = Math.min(maxTile, centerTileX + halfX);
+    const tileY1 = Math.min(maxTile, centerTileY + halfY);
 
     const tiles: { x: number; y: number }[] = [];
     for (let ty = tileY0; ty <= tileY1; ty++) {
@@ -383,11 +402,25 @@ function PharmacyMapView({
       }
     }
 
-    return { tileX0, tileY0, tileX1, tileY1, tiles };
-  }, [pharmaciesWithCoords, userLocation]);
+    const centerPixelX = (lng2tilef(centerLng, zoom) - tileX0) * TILE_SIZE;
+    const centerPixelY = (lat2tilef(centerLat, zoom) - tileY0) * TILE_SIZE;
+
+    return { tileX0, tileY0, tileX1, tileY1, tiles, centerPixelX, centerPixelY };
+  }, [pharmaciesWithCoords, userLocation, zoom, windowWidth, mapHeight]);
 
   const mapW = (tileX1 - tileX0 + 1) * TILE_SIZE;
   const mapH = (tileY1 - tileY0 + 1) * TILE_SIZE;
+
+  useEffect(() => {
+    if (pharmaciesWithCoords.length === 0) return;
+    const scrollX = Math.max(0, centerPixelX - windowWidth / 2);
+    const scrollY = Math.max(0, centerPixelY - mapHeight / 2);
+    const t = setTimeout(() => {
+      hScrollRef.current?.scrollTo({ x: scrollX, animated: false });
+      vScrollRef.current?.scrollTo({ y: scrollY, animated: false });
+    }, 80);
+    return () => clearTimeout(t);
+  }, [centerPixelX, centerPixelY, pharmaciesWithCoords.length, windowWidth, mapHeight]);
 
   const selectedPharmacy = useMemo(
     () => (selectedId !== null ? pharmaciesWithCoords.find((p) => p.id === selectedId) ?? null : null),
@@ -417,16 +450,29 @@ function PharmacyMapView({
     <View
       style={[containerSize, { borderRadius: 28, overflow: "hidden", borderWidth: 1, borderColor: "#e2e8f0" }]}
     >
-      {/* Dismiss callout on background tap */}
-      <Pressable style={{ flex: 1 }} onPress={() => setSelectedId(null)}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <ScrollView showsVerticalScrollIndicator={false}>
-            <View style={{ width: mapW, height: mapH }}>
-              {/* OSM tile images */}
+      <ScrollView
+        ref={hScrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{ flex: 1 }}
+      >
+        <ScrollView
+          ref={vScrollRef}
+          showsVerticalScrollIndicator={false}
+          nestedScrollEnabled
+          onScrollBeginDrag={() => setSelectedId(null)}
+        >
+          <View style={{ width: mapW, height: mapH }}>
+            {/* Background tap to dismiss callout */}
+            <Pressable
+              style={{ position: "absolute", top: 0, left: 0, width: mapW, height: mapH, zIndex: 1 }}
+              onPress={() => setSelectedId(null)}
+            />
+            {/* OSM tile images */}
               {tiles.map((tile) => (
                 <Image
                   key={`${tile.x}-${tile.y}`}
-                  source={{ uri: `https://basemaps.cartocdn.com/rastertiles/voyager/${MAP_ZOOM}/${tile.x}/${tile.y}.png` }}
+                  source={{ uri: `https://basemaps.cartocdn.com/rastertiles/voyager/${zoom}/${tile.x}/${tile.y}.png` }}
                   style={{
                     position: "absolute",
                     left: (tile.x - tileX0) * TILE_SIZE,
@@ -443,7 +489,7 @@ function PharmacyMapView({
                   const ulat = normalizeNumber(userLocation.latitude);
                   const ulng = normalizeNumber(userLocation.longitude);
                   if (ulat === null || ulng === null) return null;
-                  const { x, y } = latLngToPixel(ulat, ulng, tileX0, tileY0);
+                  const { x, y } = latLngToPixel(ulat, ulng, tileX0, tileY0, zoom);
                   return (
                     <View
                       style={{
@@ -472,7 +518,7 @@ function PharmacyMapView({
 
               {/* Pharmacy markers */}
               {pharmaciesWithCoords.map((pharmacy) => {
-                const { x, y } = latLngToPixel(pharmacy.latitude, pharmacy.longitude, tileX0, tileY0);
+                const { x, y } = latLngToPixel(pharmacy.latitude, pharmacy.longitude, tileX0, tileY0, zoom);
                 const color = pharmacy.isOnDuty ? "#2563eb" : pharmacy.isOpenNow ? "#10b981" : "#ef4444";
                 const isSelected = selectedId === pharmacy.id;
 
@@ -616,7 +662,6 @@ function PharmacyMapView({
             </View>
           </ScrollView>
         </ScrollView>
-      </Pressable>
 
       {/* Locate me button — top-right overlay */}
       <View style={{ position: "absolute", top: 12, right: 12, zIndex: 30 }}>
@@ -644,6 +689,55 @@ function PharmacyMapView({
           <Text style={{ fontSize: 12, fontWeight: "700", color: userLocation ? "#059669" : "#334155" }}>
             {isLocating ? "Trazim..." : userLocation ? "Moja lokacija" : "Prikazi lokaciju"}
           </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Zoom controls — bottom-right overlay */}
+      <View
+        style={{
+          position: "absolute",
+          bottom: 12,
+          right: 12,
+          zIndex: 30,
+          backgroundColor: "rgba(255,255,255,0.95)",
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: "#e2e8f0",
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.08,
+          shadowRadius: 6,
+          elevation: 4,
+          overflow: "hidden",
+        }}
+      >
+        <TouchableOpacity
+          onPress={() => setZoom((z) => Math.min(z + 1, MAP_ZOOM_MAX))}
+          disabled={zoom >= MAP_ZOOM_MAX}
+          style={{
+            width: 40,
+            height: 40,
+            alignItems: "center",
+            justifyContent: "center",
+            borderBottomWidth: 1,
+            borderBottomColor: "#e2e8f0",
+            opacity: zoom >= MAP_ZOOM_MAX ? 0.35 : 1,
+          }}
+        >
+          <Text style={{ fontSize: 22, fontWeight: "300", color: "#334155", lineHeight: 26 }}>+</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setZoom((z) => Math.max(z - 1, MAP_ZOOM_MIN))}
+          disabled={zoom <= MAP_ZOOM_MIN}
+          style={{
+            width: 40,
+            height: 40,
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: zoom <= MAP_ZOOM_MIN ? 0.35 : 1,
+          }}
+        >
+          <Text style={{ fontSize: 22, fontWeight: "300", color: "#334155", lineHeight: 26 }}>−</Text>
         </TouchableOpacity>
       </View>
 
