@@ -8,8 +8,10 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
+import { Image } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Location from "expo-location";
@@ -36,7 +38,7 @@ import {
   Target,
   X,
 } from "lucide-react-native";
-import { ScreenLayout } from "../components/ScreenLayout";
+import { StatusBar } from "expo-status-bar";
 import { apiUrl } from "../lib/api";
 import { authHeader } from "../lib/auth";
 import { useAuth } from "../context/AuthContext";
@@ -281,6 +283,401 @@ const getDutyStatus = (pharmacy: PharmacyDetails) => {
 };
 
 // ─── Checkbox row (matches web design) ───────────────────────────────────────
+
+// ─── PharmacyMapView — pure RN OSM tile map (no native map packages) ─────────
+
+const TILE_SIZE = 256;
+const MAP_ZOOM = 10;
+const N_TILES = 1 << MAP_ZOOM;
+
+function lng2tilef(lng: number): number {
+  return ((lng + 180) / 360) * N_TILES;
+}
+
+function lat2tilef(lat: number): number {
+  const sinLat = Math.sin((lat * Math.PI) / 180);
+  return (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * N_TILES;
+}
+
+function latLngToPixel(
+  lat: number,
+  lng: number,
+  tileX0: number,
+  tileY0: number
+): { x: number; y: number } {
+  return {
+    x: (lng2tilef(lng) - tileX0) * TILE_SIZE,
+    y: (lat2tilef(lat) - tileY0) * TILE_SIZE,
+  };
+}
+
+function PharmacyMapView({
+  pharmacies,
+  userLocation,
+  isLocating,
+  onRequestLocation,
+  fullScreen = false,
+}: {
+  pharmacies: PharmacySearchResult[];
+  userLocation: UserLocation | null;
+  isLocating: boolean;
+  onRequestLocation: () => void;
+  medicineName: string;
+  doseStrengths: string[];
+  fullScreen?: boolean;
+}) {
+  const { height: windowHeight } = useWindowDimensions();
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const mapHeight = Math.max(windowHeight - 290, 360);
+  const containerSize = fullScreen ? ({ flex: 1 } as const) : { height: mapHeight };
+
+  const pharmaciesWithCoords = useMemo(
+    () =>
+      pharmacies
+        .map((p) => {
+          const lat = normalizeNumber(p.latitude);
+          const lng = normalizeNumber(p.longitude);
+          if (lat === null || lng === null) return null;
+          return { ...p, latitude: lat, longitude: lng };
+        })
+        .filter(
+          (p): p is PharmacySearchResult & { latitude: number; longitude: number } => p !== null
+        ),
+    [pharmacies]
+  );
+
+  const { tileX0, tileY0, tileX1, tileY1, tiles } = useMemo(() => {
+    const lats: number[] = pharmaciesWithCoords.map((p) => p.latitude);
+    const lngs: number[] = pharmaciesWithCoords.map((p) => p.longitude);
+    if (userLocation) {
+      const ul = normalizeNumber(userLocation.latitude);
+      const ug = normalizeNumber(userLocation.longitude);
+      if (ul !== null) lats.push(ul);
+      if (ug !== null) lngs.push(ug);
+    }
+
+    const minLat = lats.length > 0 ? Math.min(...lats) : 41.8;
+    const maxLat = lats.length > 0 ? Math.max(...lats) : 43.5;
+    const minLng = lngs.length > 0 ? Math.min(...lngs) : 18.4;
+    const maxLng = lngs.length > 0 ? Math.max(...lngs) : 20.4;
+
+    const tileX0 = Math.max(0, Math.floor(lng2tilef(minLng)) - 1);
+    const tileY0 = Math.max(0, Math.floor(lat2tilef(maxLat)) - 1);
+    const tileX1 = Math.min(N_TILES - 1, Math.floor(lng2tilef(maxLng)) + 1);
+    const tileY1 = Math.min(N_TILES - 1, Math.floor(lat2tilef(minLat)) + 1);
+
+    const tiles: { x: number; y: number }[] = [];
+    for (let ty = tileY0; ty <= tileY1; ty++) {
+      for (let tx = tileX0; tx <= tileX1; tx++) {
+        tiles.push({ x: tx, y: ty });
+      }
+    }
+
+    return { tileX0, tileY0, tileX1, tileY1, tiles };
+  }, [pharmaciesWithCoords, userLocation]);
+
+  const mapW = (tileX1 - tileX0 + 1) * TILE_SIZE;
+  const mapH = (tileY1 - tileY0 + 1) * TILE_SIZE;
+
+  const selectedPharmacy = useMemo(
+    () => (selectedId !== null ? pharmaciesWithCoords.find((p) => p.id === selectedId) ?? null : null),
+    [selectedId, pharmaciesWithCoords]
+  );
+
+  if (pharmaciesWithCoords.length === 0) {
+    return (
+      <View
+        style={[containerSize, { borderRadius: 28, overflow: "hidden", borderWidth: 1, borderColor: "#e2e8f0" }]}
+        className="items-center justify-center bg-white"
+      >
+        <View className="items-center px-6">
+          <View className="h-12 w-12 items-center justify-center rounded-2xl bg-blue-50">
+            <MapPin size={24} color="#2563eb" />
+          </View>
+          <Text className="mt-4 text-xl font-bold text-slate-900">Nema rezultata za mapu</Text>
+          <Text className="mt-2 text-center text-sm leading-6 text-slate-500">
+            Apoteke bez koordinata ne mogu biti prikazane na mapi.
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View
+      style={[containerSize, { borderRadius: 28, overflow: "hidden", borderWidth: 1, borderColor: "#e2e8f0" }]}
+    >
+      {/* Dismiss callout on background tap */}
+      <Pressable style={{ flex: 1 }} onPress={() => setSelectedId(null)}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <View style={{ width: mapW, height: mapH }}>
+              {/* OSM tile images */}
+              {tiles.map((tile) => (
+                <Image
+                  key={`${tile.x}-${tile.y}`}
+                  source={{ uri: `https://basemaps.cartocdn.com/rastertiles/voyager/${MAP_ZOOM}/${tile.x}/${tile.y}.png` }}
+                  style={{
+                    position: "absolute",
+                    left: (tile.x - tileX0) * TILE_SIZE,
+                    top: (tile.y - tileY0) * TILE_SIZE,
+                    width: TILE_SIZE,
+                    height: TILE_SIZE,
+                  }}
+                />
+              ))}
+
+              {/* User location */}
+              {userLocation &&
+                (() => {
+                  const ulat = normalizeNumber(userLocation.latitude);
+                  const ulng = normalizeNumber(userLocation.longitude);
+                  if (ulat === null || ulng === null) return null;
+                  const { x, y } = latLngToPixel(ulat, ulng, tileX0, tileY0);
+                  return (
+                    <View
+                      style={{
+                        position: "absolute",
+                        left: x - 16,
+                        top: y - 16,
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+                        backgroundColor: "#7c3aed",
+                        borderWidth: 3,
+                        borderColor: "white",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        shadowColor: "#000",
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.3,
+                        elevation: 6,
+                        zIndex: 5,
+                      }}
+                    >
+                      <Text style={{ color: "white", fontSize: 9, fontWeight: "700" }}>Ja</Text>
+                    </View>
+                  );
+                })()}
+
+              {/* Pharmacy markers */}
+              {pharmaciesWithCoords.map((pharmacy) => {
+                const { x, y } = latLngToPixel(pharmacy.latitude, pharmacy.longitude, tileX0, tileY0);
+                const color = pharmacy.isOnDuty ? "#2563eb" : pharmacy.isOpenNow ? "#10b981" : "#ef4444";
+                const isSelected = selectedId === pharmacy.id;
+
+                return (
+                  <TouchableOpacity
+                    key={pharmacy.id}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      setSelectedId(isSelected ? null : pharmacy.id);
+                    }}
+                    style={{ position: "absolute", left: x - 16, top: y - 38, zIndex: isSelected ? 20 : 10 }}
+                    activeOpacity={0.8}
+                  >
+                    {/* Callout above selected marker */}
+                    {isSelected && (
+                      <View
+                        style={{
+                          position: "absolute",
+                          bottom: 44,
+                          left: -86,
+                          width: 220,
+                          backgroundColor: "white",
+                          borderRadius: 14,
+                          padding: 12,
+                          gap: 6,
+                          shadowColor: "#000",
+                          shadowOffset: { width: 0, height: 4 },
+                          shadowOpacity: 0.15,
+                          shadowRadius: 12,
+                          elevation: 8,
+                          borderWidth: 1,
+                          borderColor: "#e2e8f0",
+                        }}
+                      >
+                        <Text style={{ fontWeight: "700", fontSize: 13, color: "#0f172a", lineHeight: 18 }} numberOfLines={2}>
+                          {pharmacy.name}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: "#64748b" }} numberOfLines={1}>
+                          {pharmacy.address}
+                        </Text>
+                        <View
+                          style={{
+                            alignSelf: "flex-start",
+                            paddingHorizontal: 8,
+                            paddingVertical: 3,
+                            borderRadius: 99,
+                            backgroundColor: pharmacy.isOnDuty ? "#eff6ff" : pharmacy.isOpenNow ? "#ecfdf5" : "#fef2f2",
+                            borderWidth: 1,
+                            borderColor: pharmacy.isOnDuty ? "#bfdbfe" : pharmacy.isOpenNow ? "#a7f3d0" : "#fecaca",
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 10,
+                              fontWeight: "700",
+                              color: pharmacy.isOnDuty ? "#1d4ed8" : pharmacy.isOpenNow ? "#059669" : "#dc2626",
+                            }}
+                          >
+                            {pharmacy.isOnDuty ? "Dezurna" : pharmacy.isOpenNow ? "Radi" : "Ne radi"}
+                          </Text>
+                        </View>
+                        <View
+                          style={{
+                            backgroundColor: "#ecfdf5",
+                            borderRadius: 8,
+                            padding: 8,
+                            borderWidth: 1,
+                            borderColor: "#d1fae5",
+                            gap: 4,
+                          }}
+                        >
+                          <Text style={{ fontSize: 9, fontWeight: "700", color: "#059669", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                            Dostupne doze
+                          </Text>
+                          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
+                            {pharmacy.doses.slice(0, 4).map((dose) => (
+                              <View
+                                key={dose.doseId}
+                                style={{ backgroundColor: "#d1fae5", borderRadius: 99, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: "#a7f3d0" }}
+                              >
+                                <Text style={{ fontSize: 10, fontWeight: "700", color: "#065f46" }}>{dose.strength}</Text>
+                              </View>
+                            ))}
+                            {pharmacy.doses.length > 4 && (
+                              <Text style={{ fontSize: 10, color: "#64748b" }}>+{pharmacy.doses.length - 4}</Text>
+                            )}
+                          </View>
+                        </View>
+                        {/* Callout arrow */}
+                        <View
+                          style={{
+                            position: "absolute",
+                            bottom: -8,
+                            left: 102,
+                            width: 16,
+                            height: 16,
+                            backgroundColor: "white",
+                            transform: [{ rotate: "45deg" }],
+                            borderRightWidth: 1,
+                            borderBottomWidth: 1,
+                            borderColor: "#e2e8f0",
+                          }}
+                        />
+                      </View>
+                    )}
+
+                    {/* Pin body */}
+                    <View
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+                        backgroundColor: color,
+                        borderWidth: isSelected ? 3 : 2,
+                        borderColor: "white",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        shadowColor: "#000",
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.25,
+                        shadowRadius: 4,
+                        elevation: 5,
+                      }}
+                    >
+                      <Text style={{ color: "white", fontSize: 16, fontWeight: "900", lineHeight: 20 }}>+</Text>
+                    </View>
+                    {/* Pin tail */}
+                    <View
+                      style={{
+                        alignSelf: "center",
+                        marginTop: -4,
+                        width: 10,
+                        height: 10,
+                        backgroundColor: color,
+                        transform: [{ rotate: "45deg" }],
+                      }}
+                    />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </ScrollView>
+        </ScrollView>
+      </Pressable>
+
+      {/* Locate me button — top-right overlay */}
+      <View style={{ position: "absolute", top: 12, right: 12, zIndex: 30 }}>
+        <TouchableOpacity
+          onPress={onRequestLocation}
+          disabled={isLocating}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            backgroundColor: userLocation ? "#ecfdf5" : "rgba(255,255,255,0.95)",
+            borderWidth: 1,
+            borderColor: userLocation ? "#a7f3d0" : "#e2e8f0",
+            borderRadius: 16,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 6,
+            elevation: 4,
+          }}
+        >
+          <LocateFixed size={15} color={userLocation ? "#059669" : "#475569"} />
+          <Text style={{ fontSize: 12, fontWeight: "700", color: userLocation ? "#059669" : "#334155" }}>
+            {isLocating ? "Trazim..." : userLocation ? "Moja lokacija" : "Prikazi lokaciju"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Status legend — bottom-left overlay */}
+      <View
+        style={{
+          position: "absolute",
+          bottom: 12,
+          left: 12,
+          zIndex: 30,
+          backgroundColor: "rgba(255,255,255,0.95)",
+          borderRadius: 14,
+          padding: 10,
+          borderWidth: 1,
+          borderColor: "#e2e8f0",
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.06,
+          shadowRadius: 6,
+          elevation: 3,
+          gap: 5,
+        }}
+      >
+        <Text style={{ fontSize: 8, fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: 0.8 }}>
+          Status
+        </Text>
+        <View style={{ flexDirection: "row", gap: 4, flexWrap: "wrap" }}>
+          {[
+            { label: "Dezurna", bg: "#eff6ff", border: "#bfdbfe", text: "#1d4ed8" },
+            { label: "Radi", bg: "#ecfdf5", border: "#a7f3d0", text: "#059669" },
+            { label: "Ne radi", bg: "#fef2f2", border: "#fecaca", text: "#dc2626" },
+          ].map((s) => (
+            <View
+              key={s.label}
+              style={{ backgroundColor: s.bg, borderWidth: 1, borderColor: s.border, borderRadius: 99, paddingHorizontal: 7, paddingVertical: 3 }}
+            >
+              <Text style={{ fontSize: 9, fontWeight: "700", color: s.text }}>{s.label}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    </View>
+  );
+}
 
 function CheckboxRow({
   label,
@@ -808,147 +1205,418 @@ export default function PharmacySearchScreen() {
     }
   };
 
-  return (
-    <ScreenLayout>
-      <View className="flex-1 bg-slate-50">
+  // ── JSX shared between map and list layouts ──────────────────────────────────
 
+  const headerCard = (
+    <View
+      className="mx-4 mb-4 mt-3 rounded-[28px] border border-slate-200 bg-white px-5 py-5"
+      style={{
+        shadowColor: "#0f172a",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+        elevation: 3,
+      }}
+    >
+      <TouchableOpacity
+        onPress={() => router.back()}
+        className="flex-row items-center gap-2 self-start"
+      >
+        <ArrowLeft size={16} color="#64748b" />
+        <Text className="text-sm font-semibold text-slate-500">Nazad na pretragu</Text>
+      </TouchableOpacity>
+
+      <View className="mt-4 flex-row items-start gap-3">
+        <View className="mt-1 h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-50">
+          <Search size={20} color="#2563eb" />
+        </View>
+        <View className="flex-1 min-w-0">
+          <Text className="text-2xl font-bold tracking-tight text-slate-950" numberOfLines={2}>
+            {medicineName}
+          </Text>
+          <Text className="mt-1 text-sm text-slate-500" numberOfLines={1}>
+            {selectedDoseStrengths.length > 0
+              ? `Doze: ${selectedDoseStrengths.join(", ")}`
+              : "Rezultati za odabrane doze"}
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+
+  const filterBar = (
+    <View className="border-y border-blue-100 bg-white px-4 py-2.5">
+      <View className="flex-row gap-2">
+        <TouchableOpacity
+          onPress={() => setFiltersOpen(true)}
+          className="h-10 flex-row items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3.5"
+        >
+          <Filter size={15} color="#2563eb" />
+          <Text className="text-sm font-bold text-slate-800">Filteri</Text>
+          {activeFiltersCount > 0 && (
+            <View className="rounded-full bg-blue-600 px-1.5 py-0.5">
+              <Text className="text-[10px] font-bold text-white">{activeFiltersCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={handleSortToggle}
+          className="h-10 flex-row items-center gap-1.5 rounded-2xl border border-slate-200 bg-slate-50 px-3.5"
+        >
+          <SlidersHorizontal size={15} color="#2563eb" />
+          <Text className="text-sm font-bold text-slate-800">
+            {sort === "az" ? "A-Z" : "Udaljenost"}
+          </Text>
+          <ChevronDown size={15} color="#94a3b8" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => void requestLocation()}
+          disabled={isLocating}
+          className={`h-10 w-10 items-center justify-center rounded-full border ${
+            userLocation ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-slate-50"
+          } disabled:opacity-70`}
+        >
+          <LocateFixed size={17} color={userLocation ? "#047857" : "#334155"} />
+        </TouchableOpacity>
+      </View>
+
+      <View className="mt-2.5 flex-row items-center justify-between gap-3">
+        <TouchableOpacity
+          onPress={() => setFiltersOpen(true)}
+          className="flex-row items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1"
+        >
+          <MapPin size={11} color="#2563eb" />
+          <Text className="text-[11px] font-semibold text-blue-700">{selectedCityLabel}</Text>
+        </TouchableOpacity>
+
+        <View className="flex-row rounded-2xl border border-slate-200 bg-slate-100 p-1">
+          <TouchableOpacity
+            onPress={() => setViewMode("list")}
+            className={`rounded-xl px-3 py-1.5 ${viewMode === "list" ? "bg-white shadow-sm" : ""}`}
+          >
+            <Text className={`text-[11px] font-bold ${viewMode === "list" ? "text-slate-950" : "text-slate-500"}`}>
+              Lista
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setViewMode("map")}
+            className={`rounded-xl px-3 py-1.5 ${viewMode === "map" ? "bg-white shadow-sm" : ""}`}
+          >
+            <Text className={`text-[11px] font-bold ${viewMode === "map" ? "text-slate-950" : "text-slate-500"}`}>
+              Mapa
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
+
+  const alerts = (locationError || notificationMessage || notificationError) ? (
+    <View className="px-4 pt-3 gap-2">
+      {locationError ? (
+        <View className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+          <Text className="text-sm text-amber-700">{locationError}</Text>
+        </View>
+      ) : null}
+      {notificationMessage ? (
+        <View className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+          <Text className="text-sm text-emerald-700">{notificationMessage}</Text>
+        </View>
+      ) : null}
+      {notificationError ? (
+        <View className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5">
+          <Text className="text-sm text-red-700">{notificationError}</Text>
+        </View>
+      ) : null}
+    </View>
+  ) : null;
+
+  const filtersModal = (
+    <Modal
+      visible={filtersOpen}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setFiltersOpen(false)}
+    >
+      <View className="flex-1 bg-slate-950/40">
+        <Pressable className="flex-1" onPress={() => setFiltersOpen(false)} />
+
+        <View
+          className="max-h-[85%] rounded-t-[28px] border-t border-slate-200 bg-white"
+          style={{ paddingBottom: Math.max(insets.bottom, 16) }}
+        >
+          <View className="items-center pb-2 pt-3">
+            <View className="h-1 w-10 rounded-full bg-slate-200" />
+          </View>
+
+          <View className="flex-row items-center justify-between gap-4 border-b border-slate-100 px-4 pb-4">
+            <View>
+              <Text className="text-xs font-semibold uppercase tracking-wide text-blue-600">
+                Pretraga apoteka
+              </Text>
+              <Text className="mt-0.5 text-lg font-bold text-slate-900">Filteri</Text>
+            </View>
+            <View className="flex-row items-center gap-2">
+              <TouchableOpacity
+                onPress={() => void requestLocation()}
+                disabled={isLocating}
+                className={`h-10 w-10 items-center justify-center rounded-full border ${
+                  userLocation ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-white"
+                } disabled:opacity-70`}
+              >
+                <LocateFixed size={16} color={userLocation ? "#047857" : "#475569"} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setFiltersOpen(false)}
+                className="h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white"
+              >
+                <X size={16} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, gap: 16 }}>
+            <View className="items-end">
+              <TouchableOpacity
+                onPress={() => setFilters(DEFAULT_FILTERS)}
+                className="h-9 w-9 items-center justify-center rounded-xl border border-slate-200"
+              >
+                <RotateCcw size={15} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <View className="gap-1.5">
+              <Text className="text-xs font-semibold text-slate-500">Naziv apoteke</Text>
+              <TextInput
+                value={filters.name}
+                onChangeText={(t) => setFilters((c) => ({ ...c, name: t }))}
+                placeholder="Unesite naziv"
+                placeholderTextColor="#94a3b8"
+                className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800"
+              />
+            </View>
+
+            <View className="gap-1.5">
+              <Text className="text-xs font-semibold text-slate-500">Grad</Text>
+              <View className="rounded-2xl border border-slate-200 bg-white p-2 gap-2">
+                <View className="flex-row flex-wrap gap-2 px-1 pb-1">
+                  <TouchableOpacity
+                    onPress={() => setFilters((c) => ({ ...c, cities: [] }))}
+                    className={`rounded-full px-3 py-1.5 ${filters.cities.length === 0 ? "bg-blue-600" : "bg-slate-100"}`}
+                  >
+                    <Text className={`text-xs font-bold ${filters.cities.length === 0 ? "text-white" : "text-slate-700"}`}>
+                      Svi gradovi
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setFilters((c) => ({ ...c, cities: [] }))}
+                    disabled={filters.cities.length === 0}
+                    className="rounded-full bg-slate-100 px-3 py-1.5 disabled:opacity-50"
+                  >
+                    <Text className="text-xs font-bold text-slate-700">Ocisti izbor</Text>
+                  </TouchableOpacity>
+                </View>
+                {cities.map((city) => {
+                  const checked = filters.cities.includes(city.name);
+                  return (
+                    <TouchableOpacity
+                      key={city.id}
+                      onPress={() => toggleCity(city.name)}
+                      className={`flex-row items-center justify-between rounded-xl border px-3 py-2.5 ${
+                        checked ? "border-blue-200 bg-blue-50" : "border-slate-200 bg-white"
+                      }`}
+                    >
+                      <Text className="text-sm font-semibold text-slate-700">{city.name}</Text>
+                      <View
+                        className={`h-5 w-5 items-center justify-center rounded border ${
+                          checked ? "border-blue-600 bg-blue-600" : "border-slate-300 bg-white"
+                        }`}
+                      >
+                        {checked && <View className="h-2.5 w-2.5 rounded-sm bg-white" />}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            <CheckboxRow
+              label="Otvorena sada"
+              checked={filters.openNow}
+              onPress={() => setFilters((c) => ({ ...c, openNow: !c.openNow }))}
+            />
+
+            <CheckboxRow
+              label="Dezurna"
+              checked={filters.onDuty}
+              centered
+              onPress={() => setFilters((c) => ({ ...c, onDuty: !c.onDuty }))}
+            />
+
+            <View className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <View className="flex-row items-start justify-between gap-3">
+                <View className="flex-1 min-w-0">
+                  <View className="flex-row items-center gap-2">
+                    <MapPin size={15} color="#2563eb" />
+                    <Text className="text-sm font-bold text-slate-900">Lokacija</Text>
+                  </View>
+                  <Text className="mt-1 text-xs leading-5 text-slate-500">
+                    {userLocation
+                      ? "Udaljenost i radius su dostupni."
+                      : "Potrebna za sortiranje po udaljenosti."}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => void requestLocation()}
+                  disabled={isLocating}
+                  className={`h-10 w-10 items-center justify-center rounded-xl border ${
+                    userLocation ? "border-emerald-200 bg-white" : "border-blue-200 bg-white"
+                  } disabled:opacity-70`}
+                >
+                  <LocateFixed size={16} color={userLocation ? "#047857" : "#2563eb"} />
+                </TouchableOpacity>
+              </View>
+              {locationError ? (
+                <Text className="mt-2 text-xs font-medium leading-5 text-red-600">{locationError}</Text>
+              ) : null}
+            </View>
+
+            <View className={!userLocation ? "opacity-55" : ""}>
+              <CheckboxRow
+                label="Radius pretrage"
+                checked={filters.radiusEnabled}
+                disabled={!userLocation}
+                onPress={() =>
+                  userLocation && setFilters((c) => ({ ...c, radiusEnabled: !c.radiusEnabled }))
+                }
+              />
+              <View className="mt-3 gap-2">
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-xs font-semibold text-slate-500">Udaljenost</Text>
+                  <Text className="text-xs font-semibold text-slate-500">{filters.radius} km</Text>
+                </View>
+                <View className="flex-row gap-2">
+                  {[5, 10, 20, 30, 50].map((r) => (
+                    <TouchableOpacity
+                      key={r}
+                      onPress={() => userLocation && setFilters((c) => ({ ...c, radius: r }))}
+                      disabled={!userLocation || !filters.radiusEnabled}
+                      className={`flex-1 items-center rounded-xl border py-2 disabled:opacity-40 ${
+                        filters.radius === r && filters.radiusEnabled
+                          ? "border-blue-600 bg-blue-600"
+                          : "border-slate-200 bg-white"
+                      }`}
+                    >
+                      <Text className={`text-xs font-bold ${filters.radius === r && filters.radiusEnabled ? "text-white" : "text-slate-700"}`}>
+                        {r}km
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </View>
+
+            <View className="flex-row items-center gap-2 rounded-2xl bg-blue-50 px-3 py-2.5">
+              <SlidersHorizontal size={14} color="#2563eb" />
+              <Text className="text-xs font-semibold leading-5 text-blue-700">
+                Filteri se primjenjuju odmah.
+              </Text>
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const detailsSheet = (
+    <PharmacyDetailsSheet
+      visible={detailsVisible}
+      loading={detailsLoading}
+      error={detailsError}
+      pharmacy={detailsPharmacy}
+      medicineName={medicineName}
+      selectedDoseStrengths={selectedDoseStrengths}
+      availableDoseStrengths={detailsContext?.doses.map((d) => d.strength) ?? []}
+      distanceLabel={formatDistance(detailsContext?.distance)}
+      latestUpdateLabel={formatRelativeUpdate(detailsContext?.doses?.[0]?.lastUpdated)}
+      onClose={() => setDetailsVisible(false)}
+    />
+  );
+
+  // ── Map mode: no outer ScrollView — PharmacyMapView is the only scrollable ──
+
+  if (viewMode === "map") {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#f8fafc", paddingTop: insets.top }}>
+        <StatusBar style="dark" />
+        <View style={{ flex: 1 }} className="bg-slate-50">
+          {headerCard}
+          {filterBar}
+          {alerts}
+          <View style={{ flex: 1, paddingHorizontal: 16, paddingBottom: 16 }}>
+            {isSearchLoading ? (
+              <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                <ActivityIndicator size="large" color="#2563eb" />
+              </View>
+            ) : searchError ? (
+              <View className="rounded-2xl border border-red-200 bg-white p-5 mt-4" style={CARD_SHADOW}>
+                <View className="flex-row items-start gap-3">
+                  <View className="rounded-xl bg-red-50 p-2">
+                    <AlertCircle size={18} color="#dc2626" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-base font-bold text-slate-900">Nije moguce ucitati rezultate.</Text>
+                    <Text className="mt-1 text-sm leading-6 text-slate-600">{searchError}</Text>
+                    <TouchableOpacity
+                      onPress={() => void fetchPharmacies()}
+                      className="mt-4 flex-row items-center gap-2 self-start rounded-xl bg-slate-900 px-4 py-2"
+                    >
+                      <RotateCw size={14} color="#fff" />
+                      <Text className="text-sm font-semibold text-white">Pokusaj ponovo</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            ) : (
+              <PharmacyMapView
+                pharmacies={pharmacies}
+                userLocation={userLocation}
+                isLocating={isLocating}
+                onRequestLocation={requestLocation}
+                medicineName={medicineName}
+                doseStrengths={selectedDoseStrengths}
+                fullScreen
+              />
+            )}
+          </View>
+          {filtersModal}
+          {detailsSheet}
+        </View>
+      </View>
+    );
+  }
+
+  // ── List mode: ScrollView with sticky filter bar ───────────────────────────
+
+  return (
+    <View style={{ flex: 1, backgroundColor: "#f8fafc", paddingTop: insets.top }}>
+      <StatusBar style="dark" />
+      <View className="flex-1 bg-slate-50">
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 32 }}
           stickyHeaderIndices={[1]}
         >
-          {/* ── [0] Header card — scrolls away, filter bar sticks after it ── */}
-          <View
-            className="mx-4 mb-4 mt-3 rounded-[28px] border border-slate-200 bg-white px-5 py-5"
-            style={{
-              shadowColor: "#0f172a",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.06,
-              shadowRadius: 8,
-              elevation: 3,
-            }}
-          >
-            <TouchableOpacity
-              onPress={() => router.back()}
-              className="flex-row items-center gap-2 self-start"
-            >
-              <ArrowLeft size={16} color="#64748b" />
-              <Text className="text-sm font-semibold text-slate-500">Nazad na pretragu</Text>
-            </TouchableOpacity>
+          {/* [0] Header card — scrolls away */}
+          {headerCard}
+          {/* [1] Filter bar — stays sticky */}
+          {filterBar}
 
-            <View className="mt-4 flex-row items-start gap-3">
-              <View className="mt-1 h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-50">
-                <Search size={20} color="#2563eb" />
-              </View>
-              <View className="flex-1 min-w-0">
-                <Text className="text-2xl font-bold tracking-tight text-slate-950" numberOfLines={2}>
-                  {medicineName}
-                </Text>
-                <Text className="mt-1 text-sm text-slate-500" numberOfLines={1}>
-                  {selectedDoseStrengths.length > 0
-                    ? `Doze: ${selectedDoseStrengths.join(", ")}`
-                    : "Rezultati za odabrane doze"}
-                </Text>
-              </View>
-            </View>
-          </View>
+          {alerts}
 
-          {/* ── [1] Sticky filter bar (matches web mobile exactly) ── */}
-          <View className="border-y border-blue-100 bg-white px-4 py-2.5">
-            {/* Row 1: chips */}
-            <View className="flex-row gap-2">
-              {/* Filteri */}
-              <TouchableOpacity
-                onPress={() => setFiltersOpen(true)}
-                className="h-10 flex-row items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3.5"
-              >
-                <Filter size={15} color="#2563eb" />
-                <Text className="text-sm font-bold text-slate-800">Filteri</Text>
-                {activeFiltersCount > 0 && (
-                  <View className="rounded-full bg-blue-600 px-1.5 py-0.5">
-                    <Text className="text-[10px] font-bold text-white">{activeFiltersCount}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-
-              {/* Sort */}
-              <TouchableOpacity
-                onPress={handleSortToggle}
-                className="h-10 flex-row items-center gap-1.5 rounded-2xl border border-slate-200 bg-slate-50 px-3.5"
-              >
-                <SlidersHorizontal size={15} color="#2563eb" />
-                <Text className="text-sm font-bold text-slate-800">
-                  {sort === "az" ? "A-Z" : "Udaljenost"}
-                </Text>
-                <ChevronDown size={15} color="#94a3b8" />
-              </TouchableOpacity>
-
-              {/* Locate */}
-              <TouchableOpacity
-                onPress={() => void requestLocation()}
-                disabled={isLocating}
-                className={`h-10 w-10 items-center justify-center rounded-full border ${
-                  userLocation ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-slate-50"
-                } disabled:opacity-70`}
-              >
-                <LocateFixed size={17} color={userLocation ? "#047857" : "#334155"} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Row 2: city pill + list/map toggle */}
-            <View className="mt-2.5 flex-row items-center justify-between gap-3">
-              <TouchableOpacity
-                onPress={() => setFiltersOpen(true)}
-                className="flex-row items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1"
-              >
-                <MapPin size={11} color="#2563eb" />
-                <Text className="text-[11px] font-semibold text-blue-700">{selectedCityLabel}</Text>
-              </TouchableOpacity>
-
-              <View className="flex-row rounded-2xl border border-slate-200 bg-slate-100 p-1">
-                <TouchableOpacity
-                  onPress={() => setViewMode("list")}
-                  className={`rounded-xl px-3 py-1.5 ${viewMode === "list" ? "bg-white shadow-sm" : ""}`}
-                >
-                  <Text className={`text-[11px] font-bold ${viewMode === "list" ? "text-slate-950" : "text-slate-500"}`}>
-                    Lista
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setViewMode("map")}
-                  className={`rounded-xl px-3 py-1.5 ${viewMode === "map" ? "bg-white shadow-sm" : ""}`}
-                >
-                  <Text className={`text-[11px] font-bold ${viewMode === "map" ? "text-slate-950" : "text-slate-500"}`}>
-                    Mapa
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-
-          {/* ── Alerts ── */}
-          {(locationError || notificationMessage || notificationError) ? (
-            <View className="px-4 pt-3 gap-2">
-              {locationError ? (
-                <View className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
-                  <Text className="text-sm text-amber-700">{locationError}</Text>
-                </View>
-              ) : null}
-              {notificationMessage ? (
-                <View className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
-                  <Text className="text-sm text-emerald-700">{notificationMessage}</Text>
-                </View>
-              ) : null}
-              {notificationError ? (
-                <View className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5">
-                  <Text className="text-sm text-red-700">{notificationError}</Text>
-                </View>
-              ) : null}
-            </View>
-          ) : null}
-
-          {/* ── Count card (matches web) ── */}
-          {!isSearchLoading && !searchError && viewMode === "list" && (
+          {!isSearchLoading && !searchError && (
             <View className="mx-4 mt-4 rounded-[24px] border border-slate-200 bg-white px-5 py-4" style={CARD_SHADOW}>
               <Text className="text-sm font-semibold text-blue-600">
                 {pharmacies.length} apoteka za prikaz
@@ -960,7 +1628,6 @@ export default function PharmacySearchScreen() {
             </View>
           )}
 
-          {/* ── Results ── */}
           <View className="px-4 pt-4">
             {isSearchLoading ? (
               <LoadingSkeleton />
@@ -981,16 +1648,6 @@ export default function PharmacySearchScreen() {
                       <Text className="text-sm font-semibold text-white">Pokusaj ponovo</Text>
                     </TouchableOpacity>
                   </View>
-                </View>
-              </View>
-            ) : viewMode === "map" ? (
-              <View className="rounded-2xl border border-slate-200 bg-white p-5" style={CARD_SHADOW}>
-                <View className="items-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10">
-                  <Target size={26} color="#2563eb" />
-                  <Text className="mt-3 text-base font-semibold text-slate-900">Mapa uskoro</Text>
-                  <Text className="mt-1 text-center text-xs leading-5 text-slate-500">
-                    Map prikaz mozes nastaviti kasnije bez promjene API sloja.
-                  </Text>
                 </View>
               </View>
             ) : pharmacies.length === 0 ? (
@@ -1046,227 +1703,10 @@ export default function PharmacySearchScreen() {
           </View>
         </ScrollView>
 
-        {/* ── Filters bottom sheet ── */}
-        <Modal
-          visible={filtersOpen}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setFiltersOpen(false)}
-        >
-          <View className="flex-1 bg-slate-950/40">
-            <Pressable className="flex-1" onPress={() => setFiltersOpen(false)} />
-
-            <View
-              className="max-h-[85%] rounded-t-[28px] border-t border-slate-200 bg-white"
-              style={{ paddingBottom: Math.max(insets.bottom, 16) }}
-            >
-              {/* Drag handle */}
-              <View className="items-center pb-2 pt-3">
-                <View className="h-1 w-10 rounded-full bg-slate-200" />
-              </View>
-
-              {/* Sheet header */}
-              <View className="flex-row items-center justify-between gap-4 border-b border-slate-100 px-4 pb-4">
-                <View>
-                  <Text className="text-xs font-semibold uppercase tracking-wide text-blue-600">
-                    Pretraga apoteka
-                  </Text>
-                  <Text className="mt-0.5 text-lg font-bold text-slate-900">Filteri</Text>
-                </View>
-                <View className="flex-row items-center gap-2">
-                  <TouchableOpacity
-                    onPress={() => void requestLocation()}
-                    disabled={isLocating}
-                    className={`h-10 w-10 items-center justify-center rounded-full border ${
-                      userLocation ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-white"
-                    } disabled:opacity-70`}
-                  >
-                    <LocateFixed size={16} color={userLocation ? "#047857" : "#475569"} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => setFiltersOpen(false)}
-                    className="h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white"
-                  >
-                    <X size={16} color="#64748b" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, gap: 16 }}>
-                {/* Reset button */}
-                <View className="items-end">
-                  <TouchableOpacity
-                    onPress={() => setFilters(DEFAULT_FILTERS)}
-                    className="h-9 w-9 items-center justify-center rounded-xl border border-slate-200"
-                  >
-                    <RotateCcw size={15} color="#64748b" />
-                  </TouchableOpacity>
-                </View>
-
-                {/* Pharmacy name */}
-                <View className="gap-1.5">
-                  <Text className="text-xs font-semibold text-slate-500">Naziv apoteke</Text>
-                  <TextInput
-                    value={filters.name}
-                    onChangeText={(t) => setFilters((c) => ({ ...c, name: t }))}
-                    placeholder="Unesite naziv"
-                    placeholderTextColor="#94a3b8"
-                    className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800"
-                  />
-                </View>
-
-                {/* Cities */}
-                <View className="gap-1.5">
-                  <Text className="text-xs font-semibold text-slate-500">Grad</Text>
-                  <View className="rounded-2xl border border-slate-200 bg-white p-2 gap-2">
-                    <View className="flex-row flex-wrap gap-2 px-1 pb-1">
-                      <TouchableOpacity
-                        onPress={() => setFilters((c) => ({ ...c, cities: [] }))}
-                        className={`rounded-full px-3 py-1.5 ${filters.cities.length === 0 ? "bg-blue-600" : "bg-slate-100"}`}
-                      >
-                        <Text className={`text-xs font-bold ${filters.cities.length === 0 ? "text-white" : "text-slate-700"}`}>
-                          Svi gradovi
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => setFilters((c) => ({ ...c, cities: [] }))}
-                        disabled={filters.cities.length === 0}
-                        className="rounded-full bg-slate-100 px-3 py-1.5 disabled:opacity-50"
-                      >
-                        <Text className="text-xs font-bold text-slate-700">Ocisti izbor</Text>
-                      </TouchableOpacity>
-                    </View>
-                    {cities.map((city) => {
-                      const checked = filters.cities.includes(city.name);
-                      return (
-                        <TouchableOpacity
-                          key={city.id}
-                          onPress={() => toggleCity(city.name)}
-                          className={`flex-row items-center justify-between rounded-xl border px-3 py-2.5 ${
-                            checked ? "border-blue-200 bg-blue-50" : "border-slate-200 bg-white"
-                          }`}
-                        >
-                          <Text className="text-sm font-semibold text-slate-700">{city.name}</Text>
-                          <View
-                            className={`h-5 w-5 items-center justify-center rounded border ${
-                              checked ? "border-blue-600 bg-blue-600" : "border-slate-300 bg-white"
-                            }`}
-                          >
-                            {checked && <View className="h-2.5 w-2.5 rounded-sm bg-white" />}
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </View>
-
-                {/* Open now */}
-                <CheckboxRow
-                  label="Otvorena sada"
-                  checked={filters.openNow}
-                  onPress={() => setFilters((c) => ({ ...c, openNow: !c.openNow }))}
-                />
-
-                {/* On duty */}
-                <CheckboxRow
-                  label="Dezurna"
-                  checked={filters.onDuty}
-                  centered
-                  onPress={() => setFilters((c) => ({ ...c, onDuty: !c.onDuty }))}
-                />
-
-                {/* Location section */}
-                <View className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                  <View className="flex-row items-start justify-between gap-3">
-                    <View className="flex-1 min-w-0">
-                      <View className="flex-row items-center gap-2">
-                        <MapPin size={15} color="#2563eb" />
-                        <Text className="text-sm font-bold text-slate-900">Lokacija</Text>
-                      </View>
-                      <Text className="mt-1 text-xs leading-5 text-slate-500">
-                        {userLocation
-                          ? "Udaljenost i radius su dostupni."
-                          : "Potrebna za sortiranje po udaljenosti."}
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => void requestLocation()}
-                      disabled={isLocating}
-                      className={`h-10 w-10 items-center justify-center rounded-xl border ${
-                        userLocation ? "border-emerald-200 bg-white" : "border-blue-200 bg-white"
-                      } disabled:opacity-70`}
-                    >
-                      <LocateFixed size={16} color={userLocation ? "#047857" : "#2563eb"} />
-                    </TouchableOpacity>
-                  </View>
-                  {locationError ? (
-                    <Text className="mt-2 text-xs font-medium leading-5 text-red-600">{locationError}</Text>
-                  ) : null}
-                </View>
-
-                {/* Radius */}
-                <View className={!userLocation ? "opacity-55" : ""}>
-                  <CheckboxRow
-                    label="Radius pretrage"
-                    checked={filters.radiusEnabled}
-                    disabled={!userLocation}
-                    onPress={() =>
-                      userLocation && setFilters((c) => ({ ...c, radiusEnabled: !c.radiusEnabled }))
-                    }
-                  />
-                  <View className="mt-3 gap-2">
-                    <View className="flex-row items-center justify-between">
-                      <Text className="text-xs font-semibold text-slate-500">Udaljenost</Text>
-                      <Text className="text-xs font-semibold text-slate-500">{filters.radius} km</Text>
-                    </View>
-                    <View className="flex-row gap-2">
-                      {[5, 10, 20, 30, 50].map((r) => (
-                        <TouchableOpacity
-                          key={r}
-                          onPress={() => userLocation && setFilters((c) => ({ ...c, radius: r }))}
-                          disabled={!userLocation || !filters.radiusEnabled}
-                          className={`flex-1 items-center rounded-xl border py-2 disabled:opacity-40 ${
-                            filters.radius === r && filters.radiusEnabled
-                              ? "border-blue-600 bg-blue-600"
-                              : "border-slate-200 bg-white"
-                          }`}
-                        >
-                          <Text className={`text-xs font-bold ${filters.radius === r && filters.radiusEnabled ? "text-white" : "text-slate-700"}`}>
-                            {r}km
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-                </View>
-
-                {/* Info bar */}
-                <View className="flex-row items-center gap-2 rounded-2xl bg-blue-50 px-3 py-2.5">
-                  <SlidersHorizontal size={14} color="#2563eb" />
-                  <Text className="text-xs font-semibold leading-5 text-blue-700">
-                    Filteri se primjenjuju odmah.
-                  </Text>
-                </View>
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
-
-        {/* ── Details sheet ── */}
-        <PharmacyDetailsSheet
-          visible={detailsVisible}
-          loading={detailsLoading}
-          error={detailsError}
-          pharmacy={detailsPharmacy}
-          medicineName={medicineName}
-          selectedDoseStrengths={selectedDoseStrengths}
-          availableDoseStrengths={detailsContext?.doses.map((d) => d.strength) ?? []}
-          distanceLabel={formatDistance(detailsContext?.distance)}
-          latestUpdateLabel={formatRelativeUpdate(detailsContext?.doses?.[0]?.lastUpdated)}
-          onClose={() => setDetailsVisible(false)}
-        />
+        {filtersModal}
+        {detailsSheet}
       </View>
-    </ScreenLayout>
+    </View>
   );
 }
 
