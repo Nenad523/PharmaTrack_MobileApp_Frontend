@@ -1123,7 +1123,16 @@ export default function PharmacySearchScreen() {
       });
       setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
     } catch (e) {
-      setLocationError(e instanceof Error ? e.message : "Nije moguce dobiti lokaciju.");
+      const raw = e instanceof Error ? e.message : "";
+      const lower = raw.toLowerCase();
+      const msg =
+        lower.includes("unsatisfied device") ||
+        lower.includes("location request failed") ||
+        lower.includes("location services are disabled") ||
+        lower.includes("location provider")
+          ? "Lokacijske usluge su isključene. Uključite ih u postavkama uređaja."
+          : raw || "Nije moguće dobiti lokaciju.";
+      setLocationError(msg);
     } finally {
       setIsLocating(false);
     }
@@ -1245,13 +1254,13 @@ export default function PharmacySearchScreen() {
   );
 
   const filterBar = (
-    <View className="border-y border-blue-100 bg-white px-4 py-2.5">
+    <View className="border-y border-blue-100 bg-white px-4 py-3.5">
       <View className="flex-row gap-2">
         <TouchableOpacity
           onPress={() => setFiltersOpen(true)}
-          className="h-10 flex-row items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3.5"
+          className="h-11 flex-row items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4"
         >
-          <Filter size={15} color="#2563eb" />
+          <Filter size={16} color="#2563eb" />
           <Text className="text-sm font-bold text-slate-800">Filteri</Text>
           {activeFiltersCount > 0 && (
             <View className="rounded-full bg-blue-600 px-1.5 py-0.5">
@@ -1262,49 +1271,49 @@ export default function PharmacySearchScreen() {
 
         <TouchableOpacity
           onPress={handleSortToggle}
-          className="h-10 flex-row items-center gap-1.5 rounded-2xl border border-slate-200 bg-slate-50 px-3.5"
+          className="h-11 flex-row items-center gap-1.5 rounded-2xl border border-slate-200 bg-slate-50 px-4"
         >
-          <SlidersHorizontal size={15} color="#2563eb" />
+          <SlidersHorizontal size={16} color="#2563eb" />
           <Text className="text-sm font-bold text-slate-800">
             {sort === "az" ? "A-Z" : "Udaljenost"}
           </Text>
-          <ChevronDown size={15} color="#94a3b8" />
+          <ChevronDown size={16} color="#94a3b8" />
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={() => void requestLocation()}
           disabled={isLocating}
-          className={`h-10 w-10 items-center justify-center rounded-full border ${
+          className={`h-11 w-11 items-center justify-center rounded-full border ${
             userLocation ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-slate-50"
           } disabled:opacity-70`}
         >
-          <LocateFixed size={17} color={userLocation ? "#047857" : "#334155"} />
+          <LocateFixed size={18} color={userLocation ? "#047857" : "#334155"} />
         </TouchableOpacity>
       </View>
 
-      <View className="mt-2.5 flex-row items-center justify-between gap-3">
+      <View className="mt-3 flex-row items-center justify-between gap-3">
         <TouchableOpacity
           onPress={() => setFiltersOpen(true)}
-          className="flex-row items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1"
+          className="flex-row items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1.5"
         >
-          <MapPin size={11} color="#2563eb" />
-          <Text className="text-[11px] font-semibold text-blue-700">{selectedCityLabel}</Text>
+          <MapPin size={12} color="#2563eb" />
+          <Text className="text-xs font-semibold text-blue-700">{selectedCityLabel}</Text>
         </TouchableOpacity>
 
         <View className="flex-row rounded-2xl border border-slate-200 bg-slate-100 p-1">
           <TouchableOpacity
             onPress={() => setViewMode("list")}
-            className={`rounded-xl px-3 py-1.5 ${viewMode === "list" ? "bg-white shadow-sm" : ""}`}
+            className={`rounded-xl px-3.5 py-2 ${viewMode === "list" ? "bg-white shadow-sm" : ""}`}
           >
-            <Text className={`text-[11px] font-bold ${viewMode === "list" ? "text-slate-950" : "text-slate-500"}`}>
+            <Text className={`text-xs font-bold ${viewMode === "list" ? "text-slate-950" : "text-slate-500"}`}>
               Lista
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setViewMode("map")}
-            className={`rounded-xl px-3 py-1.5 ${viewMode === "map" ? "bg-white shadow-sm" : ""}`}
+            className={`rounded-xl px-3.5 py-2 ${viewMode === "map" ? "bg-white shadow-sm" : ""}`}
           >
-            <Text className={`text-[11px] font-bold ${viewMode === "map" ? "text-slate-950" : "text-slate-500"}`}>
+            <Text className={`text-xs font-bold ${viewMode === "map" ? "text-slate-950" : "text-slate-500"}`}>
               Mapa
             </Text>
           </TouchableOpacity>
@@ -1549,7 +1558,7 @@ export default function PharmacySearchScreen() {
 
   if (viewMode === "map") {
     return (
-      <View style={{ flex: 1, backgroundColor: "#f8fafc", paddingTop: insets.top }}>
+      <View style={{ flex: 1, backgroundColor: "#f8fafc", paddingTop: insets.top, paddingBottom: insets.bottom }}>
         <StatusBar style="dark" />
         <View style={{ flex: 1 }} className="bg-slate-50">
           {headerCard}
@@ -1606,7 +1615,7 @@ export default function PharmacySearchScreen() {
       <View className="flex-1 bg-slate-50">
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 32 }}
+          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 16, 32) }}
           stickyHeaderIndices={[1]}
         >
           {/* [0] Header card — scrolls away */}
