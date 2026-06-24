@@ -1,7 +1,11 @@
 import { Tabs } from "expo-router";
-import { Bell, Clock, Home, Search } from "lucide-react-native";
+import { Bell, Clock, Home, Search, ShieldCheck } from "lucide-react-native";
+import { useAuth } from "../../context/AuthContext";
 
 export default function TabLayout() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+
   return (
     <Tabs
       screenOptions={{
@@ -44,6 +48,15 @@ export default function TabLayout() {
         options={{
           title: "Notif",
           tabBarIcon: ({ color, size }) => <Bell size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="admin"
+        options={{
+          title: "Admin",
+          tabBarIcon: ({ color, size }) => <ShieldCheck size={size} color={color} />,
+          tabBarItemStyle: isAdmin ? undefined : { display: "none" },
+          href: isAdmin ? undefined : null,
         }}
       />
     </Tabs>
