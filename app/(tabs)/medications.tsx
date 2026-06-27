@@ -416,9 +416,9 @@ export default function MedicationsScreen() {
 
           {/* Login notice for symptom mode */}
           {showLoginNotice && !user && (
-            <View className="mt-3 flex-row items-start gap-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
-              <Lock size={14} color="#2563eb" style={{ marginTop: 1 }} />
-              <Text className="flex-1 text-xs leading-5 text-blue-800">
+            <View className="mt-3 flex-row items-start gap-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-4">
+              <Lock size={18} color="#2563eb" style={{ marginTop: 2 }} />
+              <Text className="flex-1 text-sm font-semibold leading-6 text-blue-800">
                 Pretraga po simptomu dostupna je samo prijavljenim korisnicima.
                 Prijavite se da biste koristili ovu funkciju.
               </Text>

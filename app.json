@@ -18,6 +18,9 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
+      "androidNavigationBar": {
+        "visible": "immersive"
+      },
       "package": "com.nenadpsorganization.pharmatrack",
       "googleServicesFile": "./google-services.json"
     },

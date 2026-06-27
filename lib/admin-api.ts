@@ -162,6 +162,25 @@ export async function uploadMedicationImage(medicationName: string, imageUri: st
   return res.json() as Promise<{ medicationId: number; medicationName: string; imageUrl: string }>;
 }
 
+export async function uploadPharmacyImage(pharmacyId: number, imageUri: string) {
+  const headers = await authHeader();
+  const formData = new FormData();
+  formData.append("pharmacyId", String(pharmacyId));
+  const filename = imageUri.split("/").pop() ?? "image.jpg";
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "jpg";
+  const mimeType = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+  formData.append("file", { uri: imageUri, name: filename, type: mimeType } as unknown as Blob);
+
+  const res = await fetch(apiUrl("/api/v1/upload/pharmacy-image"), {
+    method: "POST",
+    headers: headers as Record<string, string>,
+    body: formData,
+  });
+
+  if (!res.ok) throw new Error(await responseMessage(res));
+  return res.json() as Promise<{ pharmacyId: number; imageUrl: string }>;
+}
+
 // ─── Pharmacies ──────────────────────────────────────────────────────────────
 
 export async function searchPharmacies(name: string): Promise<PharmacySearchResult[]> {

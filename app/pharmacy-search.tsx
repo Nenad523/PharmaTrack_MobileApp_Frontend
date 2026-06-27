@@ -3,15 +3,18 @@ import {
   ActivityIndicator,
   Linking,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Text,
   TextInput,
+  ToastAndroid,
   TouchableOpacity,
   useWindowDimensions,
   View,
 } from "react-native";
 import { Image } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Location from "expo-location";
@@ -101,6 +104,7 @@ type PharmacyDetails = {
   longitude: number | null;
   isActive: boolean;
   isOnDuty: boolean;
+  img_url: string | null;
   phones: string[];
   workingHours: WorkingHours[];
   dutySchedule: { startDatetime: string; endDatetime: string } | null;
@@ -117,6 +121,7 @@ type PharmacyDetailsResponse = {
     longitude: number | string | null;
     isActive: boolean | number;
     isOnDuty: boolean;
+    img_url?: string | null;
     phones?: string[];
     workingHours?: WorkingHours[];
     dutySchedule?: { startDatetime: string; endDatetime: string } | null;
@@ -869,6 +874,7 @@ function PharmacyDetailsSheet({
   distanceLabel,
   latestUpdateLabel,
   onClose,
+  onShowOnMap,
 }: {
   visible: boolean;
   loading: boolean;
@@ -880,19 +886,25 @@ function PharmacyDetailsSheet({
   distanceLabel: string | null;
   latestUpdateLabel: string;
   onClose: () => void;
+  onShowOnMap: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const [copied, setCopied] = useState(false);
 
-  const openMaps = async () => {
+  const copyAddress = async () => {
     if (!pharmacy) return;
-    const label = encodeURIComponent(`${pharmacy.name}, ${pharmacy.address}, ${pharmacy.city}`);
     const lat = pharmacy.latitude;
     const lng = pharmacy.longitude;
-    const url =
+    const text =
       lat !== null && lng !== null
-        ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
-        : `https://www.google.com/maps/search/?api=1&query=${label}`;
-    await Linking.openURL(url);
+        ? `${lat},${lng}`
+        : `${pharmacy.address}, ${pharmacy.city}`;
+    await Clipboard.setStringAsync(text);
+    setCopied(true);
+    if (Platform.OS === "android") {
+      ToastAndroid.show("Adresa kopirana", ToastAndroid.SHORT);
+    }
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const dutyStatus = pharmacy ? getDutyStatus(pharmacy) : null;
@@ -924,7 +936,7 @@ function PharmacyDetailsSheet({
                   </Text>
                   <Text className="mt-0.5 text-sm font-medium text-slate-500">{pharmacy.city}</Text>
                   <TouchableOpacity
-                    onPress={openMaps}
+                    onPress={onShowOnMap}
                     className="mt-3 self-start flex-row items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2"
                   >
                     <Route size={14} color="#1d4ed8" />
@@ -958,6 +970,17 @@ function PharmacyDetailsSheet({
             </View>
           ) : (
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, gap: 20 }}>
+              {/* Pharmacy image */}
+              {pharmacy.img_url ? (
+                <View className="overflow-hidden rounded-3xl border border-slate-200">
+                  <Image
+                    source={{ uri: pharmacy.img_url }}
+                    style={{ width: "100%", height: 180 }}
+                    resizeMode="cover"
+                  />
+                </View>
+              ) : null}
+
               {/* Medicine context gradient card */}
               <View
                 className="overflow-hidden rounded-3xl border border-emerald-200/80"
@@ -1081,11 +1104,13 @@ function PharmacyDetailsSheet({
                 <View className="mb-2.5 flex-row items-center justify-between">
                   <Text className="text-base font-bold text-slate-900">Lokacija</Text>
                   <TouchableOpacity
-                    onPress={openMaps}
-                    className="flex-row items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5"
+                    onPress={() => void copyAddress()}
+                    className={`flex-row items-center gap-1.5 rounded-xl border px-3 py-1.5 ${copied ? "border-emerald-200 bg-emerald-50" : "border-blue-200 bg-blue-50"}`}
                   >
-                    <Copy size={12} color="#1d4ed8" />
-                    <Text className="text-xs font-semibold text-blue-700">Otvori</Text>
+                    <Copy size={12} color={copied ? "#059669" : "#1d4ed8"} />
+                    <Text className={`text-xs font-semibold ${copied ? "text-emerald-700" : "text-blue-700"}`}>
+                      {copied ? "Kopirano!" : "Kopiraj adresu"}
+                    </Text>
                   </TouchableOpacity>
                 </View>
                 <View className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -1182,6 +1207,7 @@ export default function PharmacySearchScreen() {
   });
   const [sort, setSort] = useState<SearchSort>("az");
   const [viewMode, setViewMode] = useState<SearchViewMode>("list");
+  const [mapSinglePharmacy, setMapSinglePharmacy] = useState<PharmacySearchResult | null>(null);
   const [cities, setCities] = useState<City[]>(FALLBACK_CITIES);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [isLocating, setIsLocating] = useState(false);
@@ -1338,6 +1364,7 @@ export default function PharmacySearchScreen() {
         longitude: normalizeNumber(data.data.longitude),
         isActive: data.data.isActive === true || data.data.isActive === 1,
         isOnDuty: data.data.isOnDuty,
+        img_url: data.data.img_url ?? null,
         phones: Array.isArray(data.data.phones) ? data.data.phones : [],
         workingHours: Array.isArray(data.data.workingHours) ? data.data.workingHours : [],
         dutySchedule: data.data.dutySchedule ?? null,
@@ -1567,7 +1594,7 @@ export default function PharmacySearchScreen() {
 
         <View className="flex-row rounded-2xl border border-slate-200 bg-slate-100 p-1">
           <TouchableOpacity
-            onPress={() => setViewMode("list")}
+            onPress={() => { setViewMode("list"); setMapSinglePharmacy(null); }}
             className={`rounded-xl px-3.5 py-2 ${viewMode === "list" ? "bg-white shadow-sm" : ""}`}
           >
             <Text className={`text-xs font-bold ${viewMode === "list" ? "text-slate-950" : "text-slate-500"}`}>
@@ -1575,7 +1602,7 @@ export default function PharmacySearchScreen() {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => setViewMode("map")}
+            onPress={() => { setViewMode("map"); setMapSinglePharmacy(null); }}
             className={`rounded-xl px-3.5 py-2 ${viewMode === "map" ? "bg-white shadow-sm" : ""}`}
           >
             <Text className={`text-xs font-bold ${viewMode === "map" ? "text-slate-950" : "text-slate-500"}`}>
@@ -1816,6 +1843,11 @@ export default function PharmacySearchScreen() {
       distanceLabel={formatDistance(detailsContext?.distance)}
       latestUpdateLabel={formatRelativeUpdate(detailsContext?.doses?.[0]?.lastUpdated)}
       onClose={() => setDetailsVisible(false)}
+      onShowOnMap={() => {
+        setDetailsVisible(false);
+        setMapSinglePharmacy(detailsContext);
+        setViewMode("map");
+      }}
     />
   );
 
@@ -1855,7 +1887,7 @@ export default function PharmacySearchScreen() {
               </View>
             ) : (
               <PharmacyMapView
-                pharmacies={pharmacies}
+                pharmacies={mapSinglePharmacy ? [mapSinglePharmacy] : pharmacies}
                 userLocation={userLocation}
                 isLocating={isLocating}
                 onRequestLocation={requestLocation}

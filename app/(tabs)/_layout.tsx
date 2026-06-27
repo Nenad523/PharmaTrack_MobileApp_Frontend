@@ -1,10 +1,12 @@
 import { Tabs } from "expo-router";
 import { Bell, Clock, Home, Search, ShieldCheck } from "lucide-react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../context/AuthContext";
 
 export default function TabLayout() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  const insets = useSafeAreaInsets();
 
   return (
     <Tabs
@@ -13,6 +15,9 @@ export default function TabLayout() {
         tabBarStyle: {
           borderTopColor: "#f3f4f6",
           backgroundColor: "rgba(255,255,255,0.95)",
+          height: 56 + insets.bottom + 10,
+          paddingBottom: insets.bottom + 10,
+          paddingTop: 6,
         },
         tabBarActiveTintColor: "#2563eb",
         tabBarInactiveTintColor: "#9ca3af",

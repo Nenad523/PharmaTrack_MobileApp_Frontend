@@ -10,6 +10,7 @@ import { MedicationEditor } from "../../components/admin/MedicationEditor";
 import { MedicationSearchPanel } from "../../components/admin/MedicationSearchPanel";
 import { DutyManager } from "../../components/admin/DutyManager";
 import { PharmacyEditor } from "../../components/admin/PharmacyEditor";
+import { PharmacyImageUploadPanel } from "../../components/admin/PharmacyImageUploadPanel";
 import { PharmacySearchPanel } from "../../components/admin/PharmacySearchPanel";
 import { ScheduleExceptionsManager } from "../../components/admin/ScheduleExceptionsManager";
 import { WorkingHoursManager } from "../../components/admin/WorkingHoursManager";
@@ -44,6 +45,7 @@ import {
   updateScheduleException,
   updateWorkingHours,
   uploadMedicationImage,
+  uploadPharmacyImage,
 } from "../../lib/admin-api";
 import { useAuth } from "../../context/AuthContext";
 import type {
@@ -358,6 +360,11 @@ export default function AdminScreen() {
     await runPharmAction(async () => { await deleteScheduleException(selectedPharmacy.id, exId); setExceptions((prev) => prev.filter((e) => e.id !== exId)); }, "Izuzetak je obrisan.");
   };
 
+  const handleUploadPharmacyImage = async (uri: string) => {
+    if (!selectedPharmacy) return;
+    await runPharmAction(async () => { await uploadPharmacyImage(selectedPharmacy.id, uri); await refreshPharmacyData(selectedPharmacy.id); }, "Slika apoteke je uploadovana.");
+  };
+
   if (!isAdmin) {
     return (
       <ScreenLayout>
@@ -495,6 +502,11 @@ export default function AdminScreen() {
                 onCreatePharmacy={handleCreatePharmacy}
                 onUpdatePharmacy={handleUpdatePharmacy}
                 onDeletePharmacy={handleDeletePharmacy}
+              />
+              <PharmacyImageUploadPanel
+                pharmacy={selectedPharmacy}
+                isBusy={pharmBusy || pharmSelecting}
+                onUploadImage={handleUploadPharmacyImage}
               />
               <WorkingHoursManager
                 pharmacy={selectedPharmacy}

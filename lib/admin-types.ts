@@ -44,6 +44,7 @@ export type PharmacyDetails = {
   latitude: number;
   longitude: number;
   city_id: number;
+  img_url?: string | null;
 };
 
 export type PharmacyPayload = {
