@@ -430,8 +430,15 @@ function PharmacyMapView({
               </TouchableOpacity>
             </View>
             <Text style={{ fontSize: 12, color: "#64748b" }} numberOfLines={1}>{p.address}</Text>
-            <View style={{ alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99, backgroundColor: statusBg, borderWidth: 1, borderColor: statusBorder }}>
-              <Text style={{ fontSize: 10, fontWeight: "700", color: statusText }}>{statusLabel}</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+              <View style={{ alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99, backgroundColor: statusBg, borderWidth: 1, borderColor: statusBorder }}>
+                <Text style={{ fontSize: 10, fontWeight: "700", color: statusText }}>{statusLabel}</Text>
+              </View>
+              <View style={{ alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99, backgroundColor: p.is_state ? "#ecfdf5" : "#f8fafc", borderWidth: 1, borderColor: p.is_state ? "#a7f3d0" : "#e2e8f0" }}>
+                <Text style={{ fontSize: 10, fontWeight: "700", color: p.is_state ? "#059669" : "#64748b" }}>
+                  {p.is_state ? "Državna" : "Privatna"}
+                </Text>
+              </View>
             </View>
             {p.doses.length > 0 && (
               <View style={{ backgroundColor: "#ecfdf5", borderRadius: 8, padding: 8, borderWidth: 1, borderColor: "#d1fae5", gap: 4 }}>
