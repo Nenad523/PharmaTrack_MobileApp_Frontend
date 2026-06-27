@@ -143,6 +143,13 @@ export async function deleteDose(medicationId: number, doseId: number) {
   );
 }
 
+export async function updateDose(medicationId: number, doseId: number, is_refundable: boolean) {
+  return adminRequest<{ success: boolean }>(
+    `/api/v1/admin/medications/${medicationId}/doses/${doseId}`,
+    { method: "PATCH", json: { is_refundable } }
+  );
+}
+
 export async function uploadMedicationImage(medicationName: string, imageUri: string) {
   const headers = await authHeader();
   const formData = new FormData();

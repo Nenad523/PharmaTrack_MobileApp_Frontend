@@ -11,6 +11,7 @@ export type ActiveIngredient = {
 export type MedicationDose = {
   id: number;
   strength: string;
+  is_refundable: boolean;
 };
 
 export type MedicationSearchResult = {
@@ -45,6 +46,7 @@ export type PharmacyDetails = {
   longitude: number;
   city_id: number;
   img_url?: string | null;
+  is_state: boolean;
 };
 
 export type PharmacyPayload = {
@@ -53,6 +55,7 @@ export type PharmacyPayload = {
   latitude: number;
   longitude: number;
   city_id: number;
+  is_state?: boolean;
 };
 
 export type WorkingHoursEntry = {

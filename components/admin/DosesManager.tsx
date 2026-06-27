@@ -9,9 +9,10 @@ type Props = {
   isBusy: boolean;
   onCreateDoses: (strengths: string[]) => Promise<void>;
   onDeleteDose: (doseId: number) => Promise<void>;
+  onUpdateDose: (doseId: number, is_refundable: boolean) => Promise<void>;
 };
 
-export function DosesManager({ medication, doses, isBusy, onCreateDoses, onDeleteDose }: Props) {
+export function DosesManager({ medication, doses, isBusy, onCreateDoses, onDeleteDose, onUpdateDose }: Props) {
   const [strengths, setStrengths] = useState("");
 
   const submit = async () => {
@@ -47,6 +48,15 @@ export function DosesManager({ medication, doses, isBusy, onCreateDoses, onDelet
                 className="flex-row items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1"
               >
                 <Text className="text-sm font-semibold text-slate-700">{dose.strength}</Text>
+                <TouchableOpacity
+                  onPress={() => void onUpdateDose(dose.id, !dose.is_refundable)}
+                  disabled={isBusy}
+                  className={`rounded px-1.5 py-0.5 ${dose.is_refundable ? "bg-emerald-50" : "bg-slate-100"}`}
+                >
+                  <Text className={`text-[10px] font-bold ${dose.is_refundable ? "text-emerald-700" : "text-slate-400"}`}>
+                    RFZO
+                  </Text>
+                </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => void onDeleteDose(dose.id)}
                   disabled={isBusy}

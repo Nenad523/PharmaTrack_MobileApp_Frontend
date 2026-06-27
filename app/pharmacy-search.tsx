@@ -63,6 +63,7 @@ type PharmacySearchDose = {
   doseId: number;
   strength: string;
   lastUpdated?: string | null;
+  is_refundable: boolean;
 };
 
 type PharmacySearchResult = {
@@ -78,6 +79,7 @@ type PharmacySearchResult = {
   openUntil: string | null;
   availabilitySource: "exception" | "duty" | "working_hours" | null;
   doses: PharmacySearchDose[];
+  is_state: boolean;
 };
 
 type SearchResponse = {
@@ -437,11 +439,19 @@ function PharmacyMapView({
                   Dostupne doze
                 </Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
-                  {p.doses.slice(0, 4).map((dose) => (
-                    <View key={dose.doseId} style={{ backgroundColor: "#d1fae5", borderRadius: 99, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: "#a7f3d0" }}>
-                      <Text style={{ fontSize: 10, fontWeight: "700", color: "#065f46" }}>{dose.strength}</Text>
-                    </View>
-                  ))}
+                  {p.doses.slice(0, 4).map((dose) => {
+                    const refundable = p.is_state && dose.is_refundable;
+                    return (
+                      <View key={dose.doseId} style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: refundable ? "#d1fae5" : "#f1f5f9", borderRadius: 99, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: refundable ? "#a7f3d0" : "#e2e8f0" }}>
+                        <Text style={{ fontSize: 10, fontWeight: "700", color: refundable ? "#065f46" : "#475569" }}>{dose.strength}</Text>
+                        {refundable && (
+                          <View style={{ backgroundColor: "#059669", borderRadius: 4, paddingHorizontal: 3, paddingVertical: 1 }}>
+                            <Text style={{ fontSize: 8, fontWeight: "900", color: "#fff" }}>RFZO</Text>
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
                   {p.doses.length > 4 && (
                     <Text style={{ fontSize: 10, color: "#64748b" }}>+{p.doses.length - 4}</Text>
                   )}
@@ -1169,6 +1179,7 @@ export default function PharmacySearchScreen() {
       const doses: PharmacySearchDose[] = (Array.isArray(data.data) ? data.data : []).map((d) => ({
         doseId: d.id,
         strength: d.strength,
+        is_refundable: false,
       }));
       setAltDoses(doses);
       setSelectedAltDoseIds(doses.map((d) => d.doseId));

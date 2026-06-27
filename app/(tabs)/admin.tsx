@@ -25,6 +25,7 @@ import {
   deleteDose,
   deleteDuty,
   deleteMedication,
+  updateDose,
   deletePharmacy,
   deleteScheduleException,
   deleteWorkingHours,
@@ -272,6 +273,11 @@ export default function AdminScreen() {
     await runAction(async () => { await createDoses(selectedMedication.id, strengths); await refreshMedication(selectedMedication.id); }, "Doze su dodate.");
   };
 
+  const handleUpdateDose = async (doseId: number, is_refundable: boolean) => {
+    if (!selectedMedication) return;
+    await runAction(async () => { await updateDose(selectedMedication.id, doseId, is_refundable); await refreshMedication(selectedMedication.id); }, is_refundable ? "Doza označena kao refundabilna." : "Doza označena kao nerefundabilna.");
+  };
+
   const handleDeleteDose = async (doseId: number) => {
     if (!selectedMedication) return;
     await runAction(async () => { await deleteDose(selectedMedication.id, doseId); await refreshMedication(selectedMedication.id); }, "Doza je obrisana.");
@@ -479,6 +485,7 @@ export default function AdminScreen() {
                 isBusy={isBusy}
                 onCreateDoses={handleCreateDoses}
                 onDeleteDose={handleDeleteDose}
+                onUpdateDose={handleUpdateDose}
               />
             </>
           )}

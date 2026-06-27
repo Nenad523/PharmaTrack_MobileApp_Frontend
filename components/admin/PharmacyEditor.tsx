@@ -12,7 +12,7 @@ type Props = {
   onDeletePharmacy: () => Promise<void>;
 };
 
-const empty = { name: "", address: "", latitude: "", longitude: "", city_id: "" };
+const empty = { name: "", address: "", latitude: "", longitude: "", city_id: "", is_state: false };
 
 function mapToForm(p: PharmacyDetails) {
   return {
@@ -21,6 +21,7 @@ function mapToForm(p: PharmacyDetails) {
     latitude: String(p.latitude),
     longitude: String(p.longitude),
     city_id: String(p.city_id),
+    is_state: p.is_state,
   };
 }
 
@@ -35,8 +36,11 @@ export function PharmacyEditor({
   const [form, setForm] = useState(() => (selectedPharmacy ? mapToForm(selectedPharmacy) : empty));
   const [cityPickerVisible, setCityPickerVisible] = useState(false);
 
-  const set = (field: keyof typeof empty, value: string) =>
+  const set = (field: keyof Omit<typeof empty, "is_state">, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
+
+  const toggleIsState = () =>
+    setForm((prev) => ({ ...prev, is_state: !prev.is_state }));
 
   const selectedCity = cities.find((c) => String(c.id) === form.city_id);
 
@@ -52,6 +56,7 @@ export function PharmacyEditor({
       latitude: lat,
       longitude: lng,
       city_id: cityId,
+      is_state: form.is_state,
     };
     if (selectedPharmacy) {
       await onUpdatePharmacy(payload);
@@ -135,6 +140,26 @@ export function PharmacyEditor({
           {selectedCity ? selectedCity.name : "— Izaberi grad —"}
         </Text>
         <ChevronDown size={16} color="#94a3b8" />
+      </TouchableOpacity>
+
+      <Text className={labelClass + " mt-3"}>Tip apoteke</Text>
+      <TouchableOpacity
+        onPress={toggleIsState}
+        disabled={isBusy}
+        className={`mt-1 flex-row items-center gap-2 self-start rounded-xl border px-3 py-2.5 ${
+          form.is_state
+            ? "border-emerald-200 bg-emerald-50"
+            : "border-slate-200 bg-slate-50"
+        }`}
+      >
+        <View
+          className={`h-3.5 w-3.5 rounded-full border-2 ${
+            form.is_state ? "border-emerald-500 bg-emerald-500" : "border-slate-300 bg-white"
+          }`}
+        />
+        <Text className={`text-sm font-semibold ${form.is_state ? "text-emerald-700" : "text-slate-500"}`}>
+          {form.is_state ? "Državna apoteka" : "Privatna apoteka"}
+        </Text>
       </TouchableOpacity>
 
       <View className="mt-4 flex-row gap-2">
