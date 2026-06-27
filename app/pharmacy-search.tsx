@@ -14,7 +14,7 @@ import {
   View,
 } from "react-native";
 import { Image } from "react-native";
-import MapView, { PROVIDER_GOOGLE } from "react-native-maps";
+import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -306,6 +306,7 @@ const getDutyStatus = (pharmacy: PharmacyDetails) => {
 const MNE_CENTER = { latitude: 42.7, longitude: 19.37 };
 
 function PharmacyMapView({
+  pharmacies,
   userLocation,
   isLocating,
   onRequestLocation,
@@ -322,21 +323,73 @@ function PharmacyMapView({
   const { height: windowHeight } = useWindowDimensions();
   const mapHeight = Math.max(windowHeight - 290, 360);
   const containerSize = fullScreen ? ({ flex: 1 } as const) : { height: mapHeight };
+  const mapRef = useRef<MapView>(null);
+
+  const pharmaciesWithCoords = useMemo(
+    () =>
+      pharmacies.flatMap((p) => {
+        const lat = normalizeNumber(p.latitude);
+        const lng = normalizeNumber(p.longitude);
+        if (lat === null || lng === null) return [];
+        return [{ ...p, latitude: lat, longitude: lng }];
+      }),
+    [pharmacies]
+  );
+
+  // Auto-fit camera to all markers whenever the pharmacy list changes
+  useEffect(() => {
+    if (pharmaciesWithCoords.length === 0) return;
+    const coords = pharmaciesWithCoords.map((p) => ({
+      latitude: p.latitude,
+      longitude: p.longitude,
+    }));
+    if (userLocation) coords.push(userLocation);
+    const t = setTimeout(() => {
+      mapRef.current?.fitToCoordinates(coords, {
+        edgePadding: { top: 60, right: 40, bottom: 60, left: 40 },
+        animated: true,
+      });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [pharmaciesWithCoords, userLocation]);
+
+  // Pan to user location when it resolves
+  useEffect(() => {
+    if (!userLocation) return;
+    mapRef.current?.animateToRegion(
+      { ...userLocation, latitudeDelta: 0.05, longitudeDelta: 0.05 },
+      600
+    );
+  }, [userLocation]);
 
   return (
     <View style={[containerSize, { borderRadius: 28, overflow: "hidden", borderWidth: 1, borderColor: "#e2e8f0" }]}>
       <MapView
+        ref={mapRef}
         provider={PROVIDER_GOOGLE}
         style={{ flex: 1 }}
-        initialRegion={{
-          ...MNE_CENTER,
-          latitudeDelta: 2.5,
-          longitudeDelta: 2.5,
-        }}
+        initialRegion={{ ...MNE_CENTER, latitudeDelta: 2.5, longitudeDelta: 2.5 }}
         showsUserLocation={!!userLocation}
         showsMyLocationButton={false}
         toolbarEnabled={false}
-      />
+      >
+        {pharmaciesWithCoords.map((pharmacy) => {
+          const pinColor = pharmacy.isOnDuty
+            ? "#2563eb"
+            : pharmacy.isOpenNow
+            ? "#10b981"
+            : "#ef4444";
+          return (
+            <Marker
+              key={pharmacy.id}
+              coordinate={{ latitude: pharmacy.latitude, longitude: pharmacy.longitude }}
+              pinColor={pinColor}
+              title={pharmacy.name}
+              description={pharmacy.address}
+            />
+          );
+        })}
+      </MapView>
 
       {/* Locate me button */}
       <View style={{ position: "absolute", top: 12, right: 12, zIndex: 30 }}>
@@ -365,6 +418,45 @@ function PharmacyMapView({
             {isLocating ? "Trazim..." : userLocation ? "Moja lokacija" : "Prikazi lokaciju"}
           </Text>
         </TouchableOpacity>
+      </View>
+
+      {/* Status legend */}
+      <View
+        style={{
+          position: "absolute",
+          bottom: 12,
+          left: 12,
+          zIndex: 30,
+          backgroundColor: "rgba(255,255,255,0.95)",
+          borderRadius: 14,
+          padding: 10,
+          borderWidth: 1,
+          borderColor: "#e2e8f0",
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.06,
+          shadowRadius: 6,
+          elevation: 3,
+          gap: 5,
+        }}
+      >
+        <Text style={{ fontSize: 8, fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: 0.8 }}>
+          Status
+        </Text>
+        <View style={{ flexDirection: "row", gap: 4, flexWrap: "wrap" }}>
+          {[
+            { label: "Dezurna", bg: "#eff6ff", border: "#bfdbfe", text: "#1d4ed8" },
+            { label: "Radi", bg: "#ecfdf5", border: "#a7f3d0", text: "#059669" },
+            { label: "Ne radi", bg: "#fef2f2", border: "#fecaca", text: "#dc2626" },
+          ].map((s) => (
+            <View
+              key={s.label}
+              style={{ backgroundColor: s.bg, borderWidth: 1, borderColor: s.border, borderRadius: 99, paddingHorizontal: 7, paddingVertical: 3 }}
+            >
+              <Text style={{ fontSize: 9, fontWeight: "700", color: s.text }}>{s.label}</Text>
+            </View>
+          ))}
+        </View>
       </View>
     </View>
   );
