@@ -324,6 +324,7 @@ function PharmacyMapView({
   const mapHeight = Math.max(windowHeight - 290, 360);
   const containerSize = fullScreen ? ({ flex: 1 } as const) : { height: mapHeight };
   const mapRef = useRef<MapView>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
 
   const pharmaciesWithCoords = useMemo(
     () =>
@@ -372,24 +373,84 @@ function PharmacyMapView({
         showsUserLocation={!!userLocation}
         showsMyLocationButton={false}
         toolbarEnabled={false}
+        onPress={() => setSelectedId(null)}
       >
         {pharmaciesWithCoords.map((pharmacy) => {
-          const pinColor = pharmacy.isOnDuty
-            ? "#2563eb"
-            : pharmacy.isOpenNow
-            ? "#10b981"
-            : "#ef4444";
+          const pinColor = pharmacy.isOnDuty ? "#2563eb" : pharmacy.isOpenNow ? "#10b981" : "#ef4444";
           return (
             <Marker
               key={pharmacy.id}
               coordinate={{ latitude: pharmacy.latitude, longitude: pharmacy.longitude }}
               pinColor={pinColor}
-              title={pharmacy.name}
-              description={pharmacy.address}
+              onPress={() => setSelectedId((prev) => (prev === pharmacy.id ? null : pharmacy.id))}
             />
           );
         })}
       </MapView>
+
+      {/* Selected pharmacy callout card */}
+      {selectedId !== null && (() => {
+        const p = pharmaciesWithCoords.find((x) => x.id === selectedId);
+        if (!p) return null;
+        const isOnDuty = p.isOnDuty;
+        const isOpen = p.isOpenNow;
+        const statusLabel = isOnDuty ? "Dezurna" : isOpen ? "Radi" : "Ne radi";
+        const statusBg = isOnDuty ? "#eff6ff" : isOpen ? "#ecfdf5" : "#fef2f2";
+        const statusBorder = isOnDuty ? "#bfdbfe" : isOpen ? "#a7f3d0" : "#fecaca";
+        const statusText = isOnDuty ? "#1d4ed8" : isOpen ? "#059669" : "#dc2626";
+        return (
+          <View
+            style={{
+              position: "absolute",
+              bottom: 70,
+              left: 12,
+              right: 12,
+              backgroundColor: "white",
+              borderRadius: 16,
+              padding: 14,
+              gap: 8,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.15,
+              shadowRadius: 12,
+              elevation: 8,
+              borderWidth: 1,
+              borderColor: "#e2e8f0",
+              zIndex: 40,
+            }}
+          >
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <Text style={{ fontWeight: "700", fontSize: 14, color: "#0f172a", lineHeight: 20, flex: 1, marginRight: 8 }} numberOfLines={2}>
+                {p.name}
+              </Text>
+              <TouchableOpacity onPress={() => setSelectedId(null)}>
+                <X size={16} color="#94a3b8" />
+              </TouchableOpacity>
+            </View>
+            <Text style={{ fontSize: 12, color: "#64748b" }} numberOfLines={1}>{p.address}</Text>
+            <View style={{ alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99, backgroundColor: statusBg, borderWidth: 1, borderColor: statusBorder }}>
+              <Text style={{ fontSize: 10, fontWeight: "700", color: statusText }}>{statusLabel}</Text>
+            </View>
+            {p.doses.length > 0 && (
+              <View style={{ backgroundColor: "#ecfdf5", borderRadius: 8, padding: 8, borderWidth: 1, borderColor: "#d1fae5", gap: 4 }}>
+                <Text style={{ fontSize: 9, fontWeight: "700", color: "#059669", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                  Dostupne doze
+                </Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
+                  {p.doses.slice(0, 4).map((dose) => (
+                    <View key={dose.doseId} style={{ backgroundColor: "#d1fae5", borderRadius: 99, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: "#a7f3d0" }}>
+                      <Text style={{ fontSize: 10, fontWeight: "700", color: "#065f46" }}>{dose.strength}</Text>
+                    </View>
+                  ))}
+                  {p.doses.length > 4 && (
+                    <Text style={{ fontSize: 10, color: "#64748b" }}>+{p.doses.length - 4}</Text>
+                  )}
+                </View>
+              </View>
+            )}
+          </View>
+        );
+      })()}
 
       {/* Locate me button */}
       <View style={{ position: "absolute", top: 12, right: 12, zIndex: 30 }}>
