@@ -114,14 +114,22 @@ export default function AdminScreen() {
     setSelectedDoses(doses);
   };
 
+  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showNotice = (n: AdminNoticeType) => {
+    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+    setNotice(n);
+    noticeTimerRef.current = setTimeout(() => setNotice(null), 4000);
+  };
+
   const runAction = async (action: () => Promise<void>, msg: string) => {
     setIsBusy(true);
     setNotice(null);
     try {
       await action();
-      setNotice({ type: "success", message: msg });
+      showNotice({ type: "success", message: msg });
     } catch (e) {
-      setNotice({ type: "error", message: errMsg(e) });
+      showNotice({ type: "error", message: errMsg(e) });
     } finally {
       setIsBusy(false);
     }
@@ -132,9 +140,9 @@ export default function AdminScreen() {
     setNotice(null);
     try {
       await action();
-      setNotice({ type: "success", message: msg });
+      showNotice({ type: "success", message: msg });
     } catch (e) {
-      setNotice({ type: "error", message: errMsg(e) });
+      showNotice({ type: "error", message: errMsg(e) });
     } finally {
       setPharmBusy(false);
     }
@@ -142,8 +150,8 @@ export default function AdminScreen() {
 
   useEffect(() => {
     if (!isAdmin) return;
-    refreshIngredients().catch((e) => setNotice({ type: "error", message: errMsg(e) }));
-    getCities().then(setCities).catch((e) => setNotice({ type: "error", message: errMsg(e) }));
+    refreshIngredients().catch((e) => showNotice({ type: "error", message: errMsg(e) }));
+    getCities().then(setCities).catch((e) => showNotice({ type: "error", message: errMsg(e) }));
   }, [isAdmin]);
 
   // medication debounced search
@@ -158,7 +166,7 @@ export default function AdminScreen() {
         setSearchResults(await searchMedications(trimmed));
       } catch (e) {
         setSearchResults([]);
-        setNotice({ type: "error", message: errMsg(e) });
+        showNotice({ type: "error", message: errMsg(e) });
       } finally {
         setIsSearching(false);
       }
@@ -178,7 +186,7 @@ export default function AdminScreen() {
         setPharmResults(await searchPharmacies(trimmed));
       } catch (e) {
         setPharmResults([]);
-        setNotice({ type: "error", message: errMsg(e) });
+        showNotice({ type: "error", message: errMsg(e) });
       } finally {
         setPharmSearching(false);
       }
@@ -190,7 +198,7 @@ export default function AdminScreen() {
     setIsSelecting(true);
     setNotice(null);
     try { await refreshMedication(id); }
-    catch (e) { setNotice({ type: "error", message: errMsg(e) }); }
+    catch (e) { showNotice({ type: "error", message: errMsg(e) }); }
     finally { setIsSelecting(false); }
   };
 
@@ -211,7 +219,7 @@ export default function AdminScreen() {
     setPharmSelecting(true);
     setNotice(null);
     try { await refreshPharmacyData(id); }
-    catch (e) { setNotice({ type: "error", message: errMsg(e) }); }
+    catch (e) { showNotice({ type: "error", message: errMsg(e) }); }
     finally { setPharmSelecting(false); }
   };
 
