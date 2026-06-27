@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 import { Image } from "react-native";
+import MapView, { PROVIDER_GOOGLE } from "react-native-maps";
 import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -299,54 +300,12 @@ const getDutyStatus = (pharmacy: PharmacyDetails) => {
 
 // ─── Checkbox row (matches web design) ───────────────────────────────────────
 
-// ─── PharmacyMapView — pure RN OSM tile map (no native map packages) ─────────
+// ─── PharmacyMapView — Google Maps via react-native-maps ─────────────────────
 
-const TILE_SIZE = 256;
-const MAP_ZOOM_DEFAULT = 12;
-const MAP_ZOOM_MIN = 8;
-const MAP_ZOOM_MAX = 17;
-
-function nTiles(zoom: number) { return 1 << zoom; }
-
-function computeFitZoom(lats: number[], lngs: number[], viewW: number, viewH: number): number {
-  if (lats.length === 0) return MAP_ZOOM_DEFAULT;
-  const minLat = Math.min(...lats), maxLat = Math.max(...lats);
-  const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
-  const lngSpan = Math.max(maxLng - minLng, 0.005);
-  const sinMin = Math.sin(minLat * Math.PI / 180);
-  const sinMax = Math.sin(maxLat * Math.PI / 180);
-  const latFrac0 = 0.5 - Math.log((1 + sinMin) / (1 - sinMin)) / (4 * Math.PI);
-  const latFrac1 = 0.5 - Math.log((1 + sinMax) / (1 - sinMax)) / (4 * Math.PI);
-  const latSpan = Math.max(Math.abs(latFrac0 - latFrac1), 0.000005);
-  const zLng = Math.log2(viewW / TILE_SIZE / (lngSpan / 360));
-  const zLat = Math.log2(viewH / TILE_SIZE / latSpan);
-  return Math.max(MAP_ZOOM_MIN, Math.min(Math.floor(Math.min(zLng, zLat)), MAP_ZOOM_MAX));
-}
-
-function lng2tilef(lng: number, zoom: number): number {
-  return ((lng + 180) / 360) * nTiles(zoom);
-}
-
-function lat2tilef(lat: number, zoom: number): number {
-  const sinLat = Math.sin((lat * Math.PI) / 180);
-  return (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * nTiles(zoom);
-}
-
-function latLngToPixel(
-  lat: number,
-  lng: number,
-  tileX0: number,
-  tileY0: number,
-  zoom: number,
-): { x: number; y: number } {
-  return {
-    x: (lng2tilef(lng, zoom) - tileX0) * TILE_SIZE,
-    y: (lat2tilef(lat, zoom) - tileY0) * TILE_SIZE,
-  };
-}
+// Montenegro bounding box centre
+const MNE_CENTER = { latitude: 42.7, longitude: 19.37 };
 
 function PharmacyMapView({
-  pharmacies,
   userLocation,
   isLocating,
   onRequestLocation,
@@ -360,354 +319,26 @@ function PharmacyMapView({
   doseStrengths: string[];
   fullScreen?: boolean;
 }) {
-  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [zoom, setZoom] = useState(MAP_ZOOM_DEFAULT);
+  const { height: windowHeight } = useWindowDimensions();
   const mapHeight = Math.max(windowHeight - 290, 360);
   const containerSize = fullScreen ? ({ flex: 1 } as const) : { height: mapHeight };
 
-  const pharmaciesWithCoords = useMemo(
-    () =>
-      pharmacies
-        .map((p) => {
-          const lat = normalizeNumber(p.latitude);
-          const lng = normalizeNumber(p.longitude);
-          if (lat === null || lng === null) return null;
-          return { ...p, latitude: lat, longitude: lng };
-        })
-        .filter(
-          (p): p is PharmacySearchResult & { latitude: number; longitude: number } => p !== null
-        ),
-    [pharmacies]
-  );
-
-  const hScrollRef = useRef<ScrollView>(null);
-  const vScrollRef = useRef<ScrollView>(null);
-
-  // Auto-fit zoom whenever the result set changes (including city filter)
-  useEffect(() => {
-    const lats = pharmaciesWithCoords.map((p) => p.latitude);
-    const lngs = pharmaciesWithCoords.map((p) => p.longitude);
-    setZoom(computeFitZoom(lats, lngs, windowWidth, mapHeight));
-  }, [pharmaciesWithCoords, windowWidth, mapHeight]);
-
-  const { tileX0, tileY0, tileX1, tileY1, tiles, centerPixelX, centerPixelY } = useMemo(() => {
-    const lats: number[] = pharmaciesWithCoords.map((p) => p.latitude);
-    const lngs: number[] = pharmaciesWithCoords.map((p) => p.longitude);
-    if (userLocation) {
-      const ul = normalizeNumber(userLocation.latitude);
-      const ug = normalizeNumber(userLocation.longitude);
-      if (ul !== null) lats.push(ul);
-      if (ug !== null) lngs.push(ug);
-    }
-
-    const minLat = lats.length > 0 ? Math.min(...lats) : 41.8;
-    const maxLat = lats.length > 0 ? Math.max(...lats) : 43.5;
-    const minLng = lngs.length > 0 ? Math.min(...lngs) : 18.4;
-    const maxLng = lngs.length > 0 ? Math.max(...lngs) : 20.4;
-
-    const centerLat = (minLat + maxLat) / 2;
-    const centerLng = (minLng + maxLng) / 2;
-
-    const maxTile = nTiles(zoom) - 1;
-    const centerTileX = Math.floor(lng2tilef(centerLng, zoom));
-    const centerTileY = Math.floor(lat2tilef(centerLat, zoom));
-
-    // Render only enough tiles to fill the viewport + a pan buffer (max ~100 tiles total)
-    const halfX = Math.ceil(windowWidth / TILE_SIZE / 2) + 3;
-    const halfY = Math.ceil(mapHeight / TILE_SIZE / 2) + 3;
-
-    const tileX0 = Math.max(0, centerTileX - halfX);
-    const tileY0 = Math.max(0, centerTileY - halfY);
-    const tileX1 = Math.min(maxTile, centerTileX + halfX);
-    const tileY1 = Math.min(maxTile, centerTileY + halfY);
-
-    const tiles: { x: number; y: number }[] = [];
-    for (let ty = tileY0; ty <= tileY1; ty++) {
-      for (let tx = tileX0; tx <= tileX1; tx++) {
-        tiles.push({ x: tx, y: ty });
-      }
-    }
-
-    const centerPixelX = (lng2tilef(centerLng, zoom) - tileX0) * TILE_SIZE;
-    const centerPixelY = (lat2tilef(centerLat, zoom) - tileY0) * TILE_SIZE;
-
-    return { tileX0, tileY0, tileX1, tileY1, tiles, centerPixelX, centerPixelY };
-  }, [pharmaciesWithCoords, userLocation, zoom, windowWidth, mapHeight]);
-
-  const mapW = (tileX1 - tileX0 + 1) * TILE_SIZE;
-  const mapH = (tileY1 - tileY0 + 1) * TILE_SIZE;
-
-  useEffect(() => {
-    if (pharmaciesWithCoords.length === 0) return;
-    const scrollX = Math.max(0, centerPixelX - windowWidth / 2);
-    const scrollY = Math.max(0, centerPixelY - mapHeight / 2);
-    const t = setTimeout(() => {
-      hScrollRef.current?.scrollTo({ x: scrollX, animated: false });
-      vScrollRef.current?.scrollTo({ y: scrollY, animated: false });
-    }, 80);
-    return () => clearTimeout(t);
-  }, [centerPixelX, centerPixelY, pharmaciesWithCoords.length, windowWidth, mapHeight]);
-
-  // Center on user location pin when "Moja lokacija" resolves
-  useEffect(() => {
-    if (!userLocation) return;
-    const ulat = normalizeNumber(userLocation.latitude);
-    const ulng = normalizeNumber(userLocation.longitude);
-    if (ulat === null || ulng === null) return;
-    const px = latLngToPixel(ulat, ulng, tileX0, tileY0, zoom);
-    const scrollX = Math.max(0, px.x - windowWidth / 2);
-    const scrollY = Math.max(0, px.y - mapHeight / 2);
-    const t = setTimeout(() => {
-      hScrollRef.current?.scrollTo({ x: scrollX, animated: true });
-      vScrollRef.current?.scrollTo({ y: scrollY, animated: true });
-    }, 150);
-    return () => clearTimeout(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userLocation]);
-
-  const selectedPharmacy = useMemo(
-    () => (selectedId !== null ? pharmaciesWithCoords.find((p) => p.id === selectedId) ?? null : null),
-    [selectedId, pharmaciesWithCoords]
-  );
-
-  if (pharmaciesWithCoords.length === 0) {
-    return (
-      <View
-        style={[containerSize, { borderRadius: 28, overflow: "hidden", borderWidth: 1, borderColor: "#e2e8f0" }]}
-        className="items-center justify-center bg-white"
-      >
-        <View className="items-center px-6">
-          <View className="h-12 w-12 items-center justify-center rounded-2xl bg-blue-50">
-            <MapPin size={24} color="#2563eb" />
-          </View>
-          <Text className="mt-4 text-xl font-bold text-slate-900">Nema rezultata za mapu</Text>
-          <Text className="mt-2 text-center text-sm leading-6 text-slate-500">
-            Apoteke bez koordinata ne mogu biti prikazane na mapi.
-          </Text>
-        </View>
-      </View>
-    );
-  }
-
   return (
-    <View
-      style={[containerSize, { borderRadius: 28, overflow: "hidden", borderWidth: 1, borderColor: "#e2e8f0" }]}
-    >
-      <ScrollView
-        ref={hScrollRef}
-        horizontal
-        showsHorizontalScrollIndicator={false}
+    <View style={[containerSize, { borderRadius: 28, overflow: "hidden", borderWidth: 1, borderColor: "#e2e8f0" }]}>
+      <MapView
+        provider={PROVIDER_GOOGLE}
         style={{ flex: 1 }}
-      >
-        <ScrollView
-          ref={vScrollRef}
-          showsVerticalScrollIndicator={false}
-          nestedScrollEnabled
-          onScrollBeginDrag={() => setSelectedId(null)}
-        >
-          <View style={{ width: mapW, height: mapH }}>
-            {/* Background tap to dismiss callout */}
-            <Pressable
-              style={{ position: "absolute", top: 0, left: 0, width: mapW, height: mapH, zIndex: 1 }}
-              onPress={() => setSelectedId(null)}
-            />
-            {/* OSM tile images */}
-              {tiles.map((tile) => (
-                <Image
-                  key={`${tile.x}-${tile.y}`}
-                  source={{ uri: `https://basemaps.cartocdn.com/rastertiles/voyager/${zoom}/${tile.x}/${tile.y}.png` }}
-                  style={{
-                    position: "absolute",
-                    left: (tile.x - tileX0) * TILE_SIZE,
-                    top: (tile.y - tileY0) * TILE_SIZE,
-                    width: TILE_SIZE,
-                    height: TILE_SIZE,
-                  }}
-                />
-              ))}
+        initialRegion={{
+          ...MNE_CENTER,
+          latitudeDelta: 2.5,
+          longitudeDelta: 2.5,
+        }}
+        showsUserLocation={!!userLocation}
+        showsMyLocationButton={false}
+        toolbarEnabled={false}
+      />
 
-              {/* User location */}
-              {userLocation &&
-                (() => {
-                  const ulat = normalizeNumber(userLocation.latitude);
-                  const ulng = normalizeNumber(userLocation.longitude);
-                  if (ulat === null || ulng === null) return null;
-                  const { x, y } = latLngToPixel(ulat, ulng, tileX0, tileY0, zoom);
-                  return (
-                    <View
-                      style={{
-                        position: "absolute",
-                        left: x - 16,
-                        top: y - 16,
-                        width: 32,
-                        height: 32,
-                        borderRadius: 16,
-                        backgroundColor: "#7c3aed",
-                        borderWidth: 3,
-                        borderColor: "white",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        shadowColor: "#000",
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.3,
-                        elevation: 6,
-                        zIndex: 5,
-                      }}
-                    >
-                      <Text style={{ color: "white", fontSize: 9, fontWeight: "700" }}>Ja</Text>
-                    </View>
-                  );
-                })()}
-
-              {/* Pharmacy markers */}
-              {pharmaciesWithCoords.map((pharmacy) => {
-                const { x, y } = latLngToPixel(pharmacy.latitude, pharmacy.longitude, tileX0, tileY0, zoom);
-                const color = pharmacy.isOnDuty ? "#2563eb" : pharmacy.isOpenNow ? "#10b981" : "#ef4444";
-                const isSelected = selectedId === pharmacy.id;
-
-                return (
-                  <TouchableOpacity
-                    key={pharmacy.id}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      setSelectedId(isSelected ? null : pharmacy.id);
-                    }}
-                    style={{ position: "absolute", left: x - 16, top: y - 38, zIndex: isSelected ? 20 : 10 }}
-                    activeOpacity={0.8}
-                  >
-                    {/* Callout above selected marker */}
-                    {isSelected && (
-                      <View
-                        style={{
-                          position: "absolute",
-                          bottom: 44,
-                          left: -86,
-                          width: 220,
-                          backgroundColor: "white",
-                          borderRadius: 14,
-                          padding: 12,
-                          gap: 6,
-                          shadowColor: "#000",
-                          shadowOffset: { width: 0, height: 4 },
-                          shadowOpacity: 0.15,
-                          shadowRadius: 12,
-                          elevation: 8,
-                          borderWidth: 1,
-                          borderColor: "#e2e8f0",
-                        }}
-                      >
-                        <Text style={{ fontWeight: "700", fontSize: 13, color: "#0f172a", lineHeight: 18 }} numberOfLines={2}>
-                          {pharmacy.name}
-                        </Text>
-                        <Text style={{ fontSize: 11, color: "#64748b" }} numberOfLines={1}>
-                          {pharmacy.address}
-                        </Text>
-                        <View
-                          style={{
-                            alignSelf: "flex-start",
-                            paddingHorizontal: 8,
-                            paddingVertical: 3,
-                            borderRadius: 99,
-                            backgroundColor: pharmacy.isOnDuty ? "#eff6ff" : pharmacy.isOpenNow ? "#ecfdf5" : "#fef2f2",
-                            borderWidth: 1,
-                            borderColor: pharmacy.isOnDuty ? "#bfdbfe" : pharmacy.isOpenNow ? "#a7f3d0" : "#fecaca",
-                          }}
-                        >
-                          <Text
-                            style={{
-                              fontSize: 10,
-                              fontWeight: "700",
-                              color: pharmacy.isOnDuty ? "#1d4ed8" : pharmacy.isOpenNow ? "#059669" : "#dc2626",
-                            }}
-                          >
-                            {pharmacy.isOnDuty ? "Dezurna" : pharmacy.isOpenNow ? "Radi" : "Ne radi"}
-                          </Text>
-                        </View>
-                        <View
-                          style={{
-                            backgroundColor: "#ecfdf5",
-                            borderRadius: 8,
-                            padding: 8,
-                            borderWidth: 1,
-                            borderColor: "#d1fae5",
-                            gap: 4,
-                          }}
-                        >
-                          <Text style={{ fontSize: 9, fontWeight: "700", color: "#059669", textTransform: "uppercase", letterSpacing: 0.5 }}>
-                            Dostupne doze
-                          </Text>
-                          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
-                            {pharmacy.doses.slice(0, 4).map((dose) => (
-                              <View
-                                key={dose.doseId}
-                                style={{ backgroundColor: "#d1fae5", borderRadius: 99, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: "#a7f3d0" }}
-                              >
-                                <Text style={{ fontSize: 10, fontWeight: "700", color: "#065f46" }}>{dose.strength}</Text>
-                              </View>
-                            ))}
-                            {pharmacy.doses.length > 4 && (
-                              <Text style={{ fontSize: 10, color: "#64748b" }}>+{pharmacy.doses.length - 4}</Text>
-                            )}
-                          </View>
-                        </View>
-                        {/* Callout arrow */}
-                        <View
-                          style={{
-                            position: "absolute",
-                            bottom: -8,
-                            left: 102,
-                            width: 16,
-                            height: 16,
-                            backgroundColor: "white",
-                            transform: [{ rotate: "45deg" }],
-                            borderRightWidth: 1,
-                            borderBottomWidth: 1,
-                            borderColor: "#e2e8f0",
-                          }}
-                        />
-                      </View>
-                    )}
-
-                    {/* Pin body */}
-                    <View
-                      style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 16,
-                        backgroundColor: color,
-                        borderWidth: isSelected ? 3 : 2,
-                        borderColor: "white",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        shadowColor: "#000",
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.25,
-                        shadowRadius: 4,
-                        elevation: 5,
-                      }}
-                    >
-                      <Text style={{ color: "white", fontSize: 16, fontWeight: "900", lineHeight: 20 }}>+</Text>
-                    </View>
-                    {/* Pin tail */}
-                    <View
-                      style={{
-                        alignSelf: "center",
-                        marginTop: -4,
-                        width: 10,
-                        height: 10,
-                        backgroundColor: color,
-                        transform: [{ rotate: "45deg" }],
-                      }}
-                    />
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </ScrollView>
-        </ScrollView>
-
-      {/* Locate me button — top-right overlay */}
+      {/* Locate me button */}
       <View style={{ position: "absolute", top: 12, right: 12, zIndex: 30 }}>
         <TouchableOpacity
           onPress={onRequestLocation}
@@ -734,94 +365,6 @@ function PharmacyMapView({
             {isLocating ? "Trazim..." : userLocation ? "Moja lokacija" : "Prikazi lokaciju"}
           </Text>
         </TouchableOpacity>
-      </View>
-
-      {/* Zoom controls — bottom-right overlay */}
-      <View
-        style={{
-          position: "absolute",
-          bottom: 12,
-          right: 12,
-          zIndex: 30,
-          backgroundColor: "rgba(255,255,255,0.95)",
-          borderRadius: 14,
-          borderWidth: 1,
-          borderColor: "#e2e8f0",
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.08,
-          shadowRadius: 6,
-          elevation: 4,
-          overflow: "hidden",
-        }}
-      >
-        <TouchableOpacity
-          onPress={() => setZoom((z) => Math.min(z + 1, MAP_ZOOM_MAX))}
-          disabled={zoom >= MAP_ZOOM_MAX}
-          style={{
-            width: 40,
-            height: 40,
-            alignItems: "center",
-            justifyContent: "center",
-            borderBottomWidth: 1,
-            borderBottomColor: "#e2e8f0",
-            opacity: zoom >= MAP_ZOOM_MAX ? 0.35 : 1,
-          }}
-        >
-          <Text style={{ fontSize: 22, fontWeight: "300", color: "#334155", lineHeight: 26 }}>+</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setZoom((z) => Math.max(z - 1, MAP_ZOOM_MIN))}
-          disabled={zoom <= MAP_ZOOM_MIN}
-          style={{
-            width: 40,
-            height: 40,
-            alignItems: "center",
-            justifyContent: "center",
-            opacity: zoom <= MAP_ZOOM_MIN ? 0.35 : 1,
-          }}
-        >
-          <Text style={{ fontSize: 22, fontWeight: "300", color: "#334155", lineHeight: 26 }}>−</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Status legend — bottom-left overlay */}
-      <View
-        style={{
-          position: "absolute",
-          bottom: 12,
-          left: 12,
-          zIndex: 30,
-          backgroundColor: "rgba(255,255,255,0.95)",
-          borderRadius: 14,
-          padding: 10,
-          borderWidth: 1,
-          borderColor: "#e2e8f0",
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.06,
-          shadowRadius: 6,
-          elevation: 3,
-          gap: 5,
-        }}
-      >
-        <Text style={{ fontSize: 8, fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: 0.8 }}>
-          Status
-        </Text>
-        <View style={{ flexDirection: "row", gap: 4, flexWrap: "wrap" }}>
-          {[
-            { label: "Dezurna", bg: "#eff6ff", border: "#bfdbfe", text: "#1d4ed8" },
-            { label: "Radi", bg: "#ecfdf5", border: "#a7f3d0", text: "#059669" },
-            { label: "Ne radi", bg: "#fef2f2", border: "#fecaca", text: "#dc2626" },
-          ].map((s) => (
-            <View
-              key={s.label}
-              style={{ backgroundColor: s.bg, borderWidth: 1, borderColor: s.border, borderRadius: 99, paddingHorizontal: 7, paddingVertical: 3 }}
-            >
-              <Text style={{ fontSize: 9, fontWeight: "700", color: s.text }}>{s.label}</Text>
-            </View>
-          ))}
-        </View>
       </View>
     </View>
   );
