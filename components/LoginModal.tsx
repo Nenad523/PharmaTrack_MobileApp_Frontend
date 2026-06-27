@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 
-import { Mail, Lock, X } from "lucide-react-native";
+import { Mail, Lock, X, Eye, EyeOff } from "lucide-react-native";
 import { apiUrl } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 
@@ -43,6 +43,7 @@ export function LoginModal({ visible, onClose, onSwitchToRegister }: Props) {
   const [errors, setErrors] = useState<Errors>({});
   const [generalError, setGeneralError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   useEffect(() => {
@@ -179,9 +180,14 @@ export function LoginModal({ visible, onClose, onSwitchToRegister }: Props) {
                     setErrors((p) => ({ ...p, password: undefined }));
                     setGeneralError("");
                   }}
-                  secureTextEntry
+                  secureTextEntry={!showPassword}
                   editable={!loading}
                 />
+                <TouchableOpacity onPress={() => setShowPassword((v) => !v)} hitSlop={8}>
+                  {showPassword
+                    ? <EyeOff size={18} color="#94a3b8" />
+                    : <Eye size={18} color="#94a3b8" />}
+                </TouchableOpacity>
               </View>
               {errors.password ? (
                 <Text className="mt-1 text-xs text-red-500">
