@@ -136,7 +136,7 @@ export function RegisterModal({ visible, onClose, onSwitchToLogin }: Props) {
         <Pressable className="flex-1 bg-black/60" onPress={handleClose}>
           <View
             className="mt-auto rounded-t-3xl bg-white px-6 pt-6"
-            style={{ paddingBottom: 40, marginBottom: keyboardHeight }}
+            style={{ paddingBottom: 64, marginBottom: keyboardHeight }}
             onStartShouldSetResponder={() => true}
           >
             <View className="mb-6 flex-row items-center justify-between">
