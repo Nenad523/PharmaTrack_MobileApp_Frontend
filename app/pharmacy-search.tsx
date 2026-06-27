@@ -448,6 +448,26 @@ function PharmacyMapView({
                 </View>
               </View>
             )}
+            <TouchableOpacity
+              onPress={() => {
+                const dest = `${p.latitude},${p.longitude}`;
+                const origin = userLocation ? `${userLocation.latitude},${userLocation.longitude}` : null;
+                const url = `https://www.google.com/maps/dir/?api=1&destination=${dest}${origin ? `&origin=${origin}` : ""}`;
+                void Linking.openURL(url);
+              }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                backgroundColor: "#2563eb",
+                borderRadius: 12,
+                paddingVertical: 10,
+              }}
+            >
+              <Navigation size={14} color="white" />
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "white" }}>Navigiraj</Text>
+            </TouchableOpacity>
           </View>
         );
       })()}
