@@ -47,6 +47,8 @@ import {
   updateWorkingHours,
   uploadMedicationImage,
   uploadPharmacyImage,
+  removeMedicationImage,
+  removePharmacyImage,
 } from "../../lib/admin-api";
 import { useAuth } from "../../context/AuthContext";
 import type {
@@ -296,6 +298,11 @@ export default function AdminScreen() {
     await runAction(async () => { await uploadMedicationImage(selectedMedication.name, uri); await refreshMedication(selectedMedication.id); }, "Slika lijeka je uploadovana.");
   };
 
+  const handleRemoveMedicationImage = async () => {
+    if (!selectedMedication) return;
+    await runAction(async () => { await removeMedicationImage(selectedMedication.id); await refreshMedication(selectedMedication.id); }, "Slika lijeka je uklonjena.");
+  };
+
   // ─── Pharmacy handlers ───────────────────────────────────────────────────────
 
   const handleCreatePharmacy = async (payload: PharmacyPayload) =>
@@ -377,6 +384,11 @@ export default function AdminScreen() {
   const handleUploadPharmacyImage = async (uri: string) => {
     if (!selectedPharmacy) return;
     await runPharmAction(async () => { await uploadPharmacyImage(selectedPharmacy.id, uri); await refreshPharmacyData(selectedPharmacy.id); }, "Slika apoteke je uploadovana.");
+  };
+
+  const handleRemovePharmacyImage = async () => {
+    if (!selectedPharmacy) return;
+    await runPharmAction(async () => { await removePharmacyImage(selectedPharmacy.id); await refreshPharmacyData(selectedPharmacy.id); }, "Slika apoteke je uklonjena.");
   };
 
   if (!isAdmin) {
@@ -478,6 +490,7 @@ export default function AdminScreen() {
                 medication={selectedMedication}
                 isBusy={isBusy}
                 onUploadImage={handleUploadImage}
+                onRemoveImage={handleRemoveMedicationImage}
               />
               <IngredientsManager
                 medication={selectedMedication}
@@ -522,6 +535,7 @@ export default function AdminScreen() {
                 pharmacy={selectedPharmacy}
                 isBusy={pharmBusy || pharmSelecting}
                 onUploadImage={handleUploadPharmacyImage}
+                onRemoveImage={handleRemovePharmacyImage}
               />
               <WorkingHoursManager
                 pharmacy={selectedPharmacy}

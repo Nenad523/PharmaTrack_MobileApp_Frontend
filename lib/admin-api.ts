@@ -188,6 +188,14 @@ export async function uploadPharmacyImage(pharmacyId: number, imageUri: string) 
   return res.json() as Promise<{ pharmacyId: number; imageUrl: string }>;
 }
 
+export async function removeMedicationImage(medicationId: number) {
+  return adminRequest<{ success: boolean }>(`/api/v1/upload/medication-image/${medicationId}`, { method: "DELETE" });
+}
+
+export async function removePharmacyImage(pharmacyId: number) {
+  return adminRequest<{ success: boolean }>(`/api/v1/upload/pharmacy-image/${pharmacyId}`, { method: "DELETE" });
+}
+
 // ─── Pharmacies ──────────────────────────────────────────────────────────────
 
 export async function searchPharmacies(name: string): Promise<PharmacySearchResult[]> {

@@ -1,15 +1,16 @@
 import { useState } from "react";
 import { ActivityIndicator, Image, Text, TouchableOpacity, View } from "react-native";
-import { ImageUp } from "lucide-react-native";
+import { ImageUp, Trash2 } from "lucide-react-native";
 import type { PharmacyDetails } from "../../lib/admin-types";
 
 type Props = {
   pharmacy: PharmacyDetails | null;
   isBusy: boolean;
   onUploadImage: (uri: string) => Promise<void>;
+  onRemoveImage: () => Promise<void>;
 };
 
-export function PharmacyImageUploadPanel({ pharmacy, isBusy, onUploadImage }: Props) {
+export function PharmacyImageUploadPanel({ pharmacy, isBusy, onUploadImage, onRemoveImage }: Props) {
   const [pendingUri, setPendingUri] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
 
@@ -101,6 +102,17 @@ export function PharmacyImageUploadPanel({ pharmacy, isBusy, onUploadImage }: Pr
                   <ImageUp size={16} color="#1d4ed8" />
                 )}
                 <Text className="text-sm font-bold text-blue-700">Upload slike</Text>
+              </TouchableOpacity>
+            )}
+
+            {pharmacy.img_url && !pendingUri && (
+              <TouchableOpacity
+                onPress={() => void onRemoveImage()}
+                disabled={isBusy}
+                className="flex-row items-center gap-2 rounded-xl border border-red-200 px-4 py-2.5 disabled:opacity-60"
+              >
+                <Trash2 size={16} color="#dc2626" />
+                <Text className="text-sm font-bold text-red-600">Ukloni sliku</Text>
               </TouchableOpacity>
             )}
           </View>
