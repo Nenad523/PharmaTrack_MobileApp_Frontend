@@ -22,7 +22,12 @@
         "visible": "immersive"
       },
       "package": "com.nenadpsorganization.pharmatrack",
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "./google-services.json",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyD-EwEsHMLkrPg3LO9ExPDR8BHsTt7rDDU"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
