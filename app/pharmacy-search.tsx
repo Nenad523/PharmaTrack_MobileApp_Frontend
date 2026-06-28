@@ -447,7 +447,8 @@ function PharmacyMapView({
                 </Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
                   {p.doses.slice(0, 4).map((dose) => {
-                    const refundable = p.is_state && dose.is_refundable;
+                    // !! coercion guards against API returning 0/1 instead of boolean
+                    const refundable = !!p.is_state && !!dose.is_refundable;
                     return (
                       <View key={dose.doseId} style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: refundable ? "#d1fae5" : "#f1f5f9", borderRadius: 99, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: refundable ? "#a7f3d0" : "#e2e8f0" }}>
                         <Text style={{ fontSize: 10, fontWeight: "700", color: refundable ? "#065f46" : "#475569" }}>{dose.strength}</Text>
@@ -1940,17 +1941,27 @@ function PharmacyCard({
 
             {/* Dose chips */}
             <View className="mt-3 flex-row flex-wrap gap-2">
-              {pharmacy.doses.map((dose) => (
-                <View
-                  key={`${pharmacy.id}-${dose.doseId}`}
-                  className="justify-center rounded-xl border border-emerald-100 bg-emerald-50 px-2.5 py-1.5"
-                >
-                  <Text className="text-[11px] font-bold text-emerald-700">{dose.strength}</Text>
-                  <Text className="mt-0.5 text-[11px] font-semibold text-emerald-700/75">
-                    {formatRelativeUpdate(dose.lastUpdated)}
-                  </Text>
-                </View>
-              ))}
+              {pharmacy.doses.map((dose) => {
+                const refundable = !!pharmacy.is_state && !!dose.is_refundable;
+                return (
+                  <View
+                    key={`${pharmacy.id}-${dose.doseId}`}
+                    className="justify-center rounded-xl border border-emerald-100 bg-emerald-50 px-2.5 py-1.5"
+                  >
+                    <View className="flex-row items-center gap-1">
+                      <Text className="text-[11px] font-bold text-emerald-700">{dose.strength}</Text>
+                      {refundable && (
+                        <View className="rounded bg-emerald-600 px-1 py-0.5">
+                          <Text className="text-[8px] font-black text-white">RFZO</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text className="mt-0.5 text-[11px] font-semibold text-emerald-700/75">
+                      {formatRelativeUpdate(dose.lastUpdated)}
+                    </Text>
+                  </View>
+                );
+              })}
 
               {pharmacy.isOnDuty && (
                 <View className="items-center justify-center rounded-full border border-blue-100 bg-blue-50 px-3 py-1">
